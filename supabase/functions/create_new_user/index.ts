@@ -7,7 +7,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 console.log("Hello from Functions!")
 
-Deno.serve(async (req) => {
+// @ts-ignore: Deno types are not available in Next.js build
+Deno.serve(async (req: Request) => {
   const { name } = await req.json()
   const data = {
     message: `Hello ${name}!`,

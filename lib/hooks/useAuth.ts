@@ -102,7 +102,10 @@ export function useAuth() {
         user_email: email,
         user_full_name: fullName,
         user_role: role
-      })
+      }) as { 
+        data: { success: boolean; message?: string } | null; 
+        error: any 
+      }
 
       if (profileError) {
         console.error('Profile creation error:', profileError)

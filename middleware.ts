@@ -13,11 +13,11 @@ export async function middleware(req: NextRequest) {
   // Handle authentication errors
   if (error) {
     console.error('Auth error in middleware:', error)
-    return NextResponse.redirect(new URL('/sign-in', req.url))
+    return NextResponse.redirect(new URL('/sign-in?message=Authentication error', req.url))
   }
 
   // Public routes that don't need auth
-  const publicRoutes = ['/sign-in', '/sign-up', '/forgot-password', '/']
+  const publicRoutes = ['/sign-in', '/sign-up', '/forgot-password', '/reset-password', '/']
   if (publicRoutes.some(route => req.nextUrl.pathname.startsWith(route))) {
     if (session) {
       try {
@@ -41,8 +41,6 @@ export async function middleware(req: NextRequest) {
 
         // Redirect based on role
         switch (userData.role) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/admin/dashboard', req.url))
           case 'worker':
             return NextResponse.redirect(new URL('/worker/dashboard', req.url))
           case 'client':
@@ -92,13 +90,9 @@ export async function middleware(req: NextRequest) {
       )
     }
 
-    // Admin routes
-    if (req.nextUrl.pathname.startsWith('/admin')) {
-      if (userData.role !== 'admin') {
-        return NextResponse.redirect(
-          new URL('/dashboard?message=Access denied', req.url)
-        )
-      }
+    // Protected routes that require authentication but are accessible by all roles
+    const commonProtectedRoutes = ['/profile', '/settings']
+    if (commonProtectedRoutes.some(route => req.nextUrl.pathname.startsWith(route))) {
       return res
     }
 
@@ -112,22 +106,20 @@ export async function middleware(req: NextRequest) {
       return res
     }
 
-    // Client routes (dashboard)
-    if (req.nextUrl.pathname.startsWith('/dashboard')) {
+    // Client routes (dashboard and related paths)
+    if (req.nextUrl.pathname.startsWith('/dashboard') || 
+        req.nextUrl.pathname.startsWith('/appointments') ||
+        req.nextUrl.pathname.startsWith('/bookings')) {
       if (userData.role === 'client') {
         return res
       }
       // Redirect non-clients to their respective dashboards
-      switch (userData.role) {
-        case 'admin':
-          return NextResponse.redirect(new URL('/admin/dashboard', req.url))
-        case 'worker':
-          return NextResponse.redirect(new URL('/worker/dashboard', req.url))
-        default:
-          return NextResponse.redirect(
-            new URL('/sign-in?message=Invalid user role', req.url)
-          )
+      if (userData.role === 'worker') {
+        return NextResponse.redirect(new URL('/worker/dashboard', req.url))
       }
+      return NextResponse.redirect(
+        new URL('/sign-in?message=Invalid user role', req.url)
+      )
     }
 
     return res

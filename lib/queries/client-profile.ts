@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import type { ClientProfile, ClientProfileFormData, ClientStats, ClientProfileWithRelations } from '@/lib/types/client'
+import type { Appointment, Service, User } from '@/lib/types'
+import { Database } from '@/lib/types/database'
 
 interface ProfileResponse {
   profile: ClientProfileWithRelations
@@ -7,14 +9,14 @@ interface ProfileResponse {
 
 interface ServiceWithName {
   service_id: string
-  services: {
+  service: {
     name: string
   }
 }
 
 interface VisitWithDetails {
   appointment_date: string
-  services: {
+  service: {
     name: string
   }
   worker: {
@@ -53,15 +55,22 @@ export async function updateClientProfile(
   const supabase = createClient()
 
   const { data, error } = await supabase
-    .from('client_profiles')
-    .update(updates)
+    .from('profiles')
+    .update(updates as Record<string, unknown>)
     .eq('id', userId)
     .select('*')
-    .single()
+    .single() as { 
+      data: ClientProfile | null, 
+      error: any 
+    }
 
   if (error) {
     console.error('Error updating client profile:', error)
     throw error
+  }
+
+  if (!data) {
+    throw new Error('Failed to update client profile')
   }
 
   return data
@@ -74,29 +83,37 @@ export async function getClientStats(userId: string): Promise<ClientStats> {
   const { data: appointmentStats, error: appointmentError } = await supabase
     .from('appointments')
     .select('status')
-    .eq('client_id', userId)
+    .eq('client_id', userId) as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (appointmentError) throw appointmentError
+  if (!appointmentStats) throw new Error('Failed to fetch appointment stats')
 
   // Get favorite services
   const { data: rawFavoriteServices, error: servicesError } = await supabase
     .from('appointments')
     .select(`
       service_id,
-      services:service_id (
+      service:service_id (
         name
       )
     `)
     .eq('client_id', userId)
-    .eq('status', 'completed')
+    .eq('status', 'completed') as {
+      data: (Appointment & { service: Pick<Service, 'name'> })[] | null,
+      error: any
+    }
 
   if (servicesError) throw servicesError
+  if (!rawFavoriteServices) throw new Error('Failed to fetch favorite services')
 
   // Transform the raw data into the expected format
   const favoriteServices = rawFavoriteServices.map(service => ({
     service_id: service.service_id,
-    services: {
-      name: service.services[0]?.name || ''
+    service: {
+      name: service.service?.name || ''
     }
   })) as ServiceWithName[]
 
@@ -105,7 +122,7 @@ export async function getClientStats(userId: string): Promise<ClientStats> {
     .from('appointments')
     .select(`
       appointment_date,
-      services:service_id (
+      service:service_id (
         name
       ),
       worker:worker_id (
@@ -115,25 +132,32 @@ export async function getClientStats(userId: string): Promise<ClientStats> {
     .eq('client_id', userId)
     .eq('status', 'completed')
     .order('appointment_date', { ascending: false })
-    .limit(5)
+    .limit(5) as {
+      data: (Appointment & { 
+        service: Pick<Service, 'name'>,
+        worker: Pick<User, 'full_name'>
+      })[] | null,
+      error: any
+    }
 
   if (visitsError) throw visitsError
+  if (!rawRecentVisits) throw new Error('Failed to fetch recent visits')
 
   // Transform the raw data into the expected format
   const recentVisits = rawRecentVisits.map(visit => ({
     appointment_date: visit.appointment_date,
-    services: {
-      name: visit.services[0]?.name || ''
+    service: {
+      name: visit.service?.name || ''
     },
     worker: {
-      full_name: visit.worker[0]?.full_name || ''
+      full_name: visit.worker?.full_name || ''
     }
   })) as VisitWithDetails[]
 
   // Process appointment statistics
   const total_appointments = appointmentStats.length
-  const completed_appointments = (appointmentStats as AppointmentStatus[]).filter(a => a.status === 'completed').length
-  const cancelled_appointments = (appointmentStats as AppointmentStatus[]).filter(a => a.status === 'cancelled').length
+  const completed_appointments = appointmentStats.filter(a => a.status === 'completed').length
+  const cancelled_appointments = appointmentStats.filter(a => a.status === 'cancelled').length
 
   // Process favorite services
   const serviceCount = favoriteServices.reduce((acc: Record<string, number>, curr) => {
@@ -145,7 +169,7 @@ export async function getClientStats(userId: string): Promise<ClientStats> {
   const favorite_services = Object.entries(serviceCount)
     .map(([service_id, count]) => ({
       service_id,
-      service_name: favoriteServices.find(s => s.service_id === service_id)?.services.name || '',
+      service_name: favoriteServices.find(s => s.service_id === service_id)?.service.name || '',
       count
     }))
     .sort((a, b) => b.count - a.count)
@@ -154,18 +178,22 @@ export async function getClientStats(userId: string): Promise<ClientStats> {
   // Process recent visits
   const recent_visits = recentVisits.map(visit => ({
     date: visit.appointment_date,
-    service_name: visit.services.name,
+    service_name: visit.service.name,
     worker_name: visit.worker.full_name
   }))
 
   // Get client profile for loyalty points and total spent
   const { data: profile, error: profileError } = await supabase
-    .from('client_profiles')
+    .from('profiles')
     .select('loyalty_points, total_spent')
     .eq('id', userId)
-    .single()
+    .single() as {
+      data: Pick<ClientProfile, 'loyalty_points' | 'total_spent'> | null,
+      error: any
+    }
 
   if (profileError) throw profileError
+  if (!profile) throw new Error('Failed to fetch client profile')
 
   return {
     total_appointments,
@@ -186,7 +214,10 @@ export async function getPreferredWorkers() {
     .select('id, full_name, email')
     .eq('role', 'worker')
     .eq('is_active', true)
-    .order('full_name')
+    .order('full_name') as {
+      data: Pick<User, 'id' | 'full_name' | 'email'>[] | null,
+      error: any
+    }
 
   if (error) {
     console.error('Error fetching workers:', error)
@@ -198,12 +229,12 @@ export async function getPreferredWorkers() {
 
 export async function updateClientPreferences(
   userId: string,
-  preferences: Record<string, any>
+  preferences: Record<string, unknown>
 ): Promise<void> {
   const supabase = createClient()
 
   const { error } = await supabase
-    .from('client_profiles')
+    .from('profiles')
     .update({
       preferences,
       updated_at: new Date().toISOString()

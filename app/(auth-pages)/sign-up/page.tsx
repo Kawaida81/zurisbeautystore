@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Helper function to wait for a specified time
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -69,6 +76,7 @@ export default function SignUpPage() {
       confirmPassword: "",
       fullName: "",
       phone: "",
+      role: "client",
     },
   });
 
@@ -93,7 +101,7 @@ export default function SignUpPage() {
         throw new Error('An account with this email already exists');
       }
 
-      // Sign up the user with minimal metadata
+      // Sign up the user with role and metadata
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -101,7 +109,9 @@ export default function SignUpPage() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: data.fullName,
-            email: data.email
+            email: data.email,
+            role: data.role,
+            phone: data.phone || null
           }
         }
       });
@@ -113,6 +123,33 @@ export default function SignUpPage() {
 
       if (!authData.user) {
         throw new Error('No user data returned from signup');
+      }
+
+      // Create user profile in the users table
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert([
+          {
+            id: authData.user.id,
+            email: data.email,
+            full_name: data.fullName,
+            phone: data.phone || null,
+            role: data.role,
+            is_active: true
+          }
+        ]);
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        // Attempt to delete the auth user if profile creation fails
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        throw new Error('Failed to create user profile. Please try again.');
+      }
+
+      // Verify profile creation
+      const profile = await verifyUserProfile(supabase, authData.user.id);
+      if (!profile) {
+        throw new Error('Failed to verify user profile creation. Please try again.');
       }
 
       // Show success message and redirect
@@ -200,6 +237,28 @@ export default function SignUpPage() {
                         {...field}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-12">
+                          <SelectValue placeholder="Select your account type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="client">Client</SelectItem>
+                        <SelectItem value="worker">Worker</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

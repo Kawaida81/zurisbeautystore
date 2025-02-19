@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,11 +29,15 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  // Get error message from URL if it exists
+  // Get return URL and message from URL if they exist
+  const returnUrl = searchParams.get('returnUrl')
   const message = searchParams.get('message')
-  if (message) {
-    toast.info(message)
-  }
+
+  useEffect(() => {
+    if (message) {
+      toast.info(message)
+    }
+  }, [message])
 
   const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
@@ -62,9 +66,6 @@ export default function SignInPage() {
         throw new Error('No user data returned')
       }
 
-      // Wait a moment for the session to be established
-      await wait(500)
-
       // Get user profile with role
       const { data: profile, error: profileError } = await supabase
         .from('users')
@@ -80,20 +81,19 @@ export default function SignInPage() {
         throw new Error('Your account is currently inactive. Please contact support.')
       }
 
-      // Redirect based on role with correct paths
-      let redirectPath: string;
-      switch (profile.role) {
-        case 'admin':
-          redirectPath = '/admin/dashboard'
-          break;
-        case 'worker':
-          redirectPath = '/worker/dashboard'
-          break;
-        case 'client':
-          redirectPath = '/dashboard'
-          break;
-        default:
-          throw new Error('Invalid user role')
+      // Determine redirect path
+      let redirectPath = returnUrl || ''
+      if (!redirectPath) {
+        switch (profile.role) {
+          case 'worker':
+            redirectPath = '/worker/dashboard'
+            break
+          case 'client':
+            redirectPath = '/dashboard'
+            break
+          default:
+            throw new Error('Invalid user role')
+        }
       }
 
       toast.success('Successfully signed in!')
@@ -145,6 +145,7 @@ export default function SignInPage() {
                         type="email"
                         placeholder="Enter your email"
                         className="h-12"
+                        autoComplete="email"
                       />
                     </FormControl>
                     <FormMessage />
@@ -165,6 +166,7 @@ export default function SignInPage() {
                           type={showPassword ? 'text' : 'password'}
                           placeholder="Enter your password"
                           className="h-12"
+                          autoComplete="current-password"
                         />
                         <button
                           type="button"

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import type { Appointment, Service, Review, Notification } from '@/lib/types'
+import { Database } from '@/lib/types/database'
 
 export async function getServices() {
   const supabase = createClient()
@@ -7,10 +8,14 @@ export async function getServices() {
     .from('services')
     .select('*')
     .eq('is_active', true)
-    .order('name')
+    .order('name') as {
+      data: Service[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Service[]
+  if (!data) return []
+  return data
 }
 
 export async function getAppointments(userId: string) {
@@ -31,10 +36,14 @@ export async function getAppointments(userId: string) {
       )
     `)
     .eq('client_id', userId)
-    .order('appointment_date', { ascending: true })
+    .order('appointment_date', { ascending: true }) as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Appointment[]
+  if (!data) return []
+  return data
 }
 
 export async function createAppointment(appointment: Partial<Appointment>) {
@@ -42,10 +51,14 @@ export async function createAppointment(appointment: Partial<Appointment>) {
   const { data, error } = await supabase
     .from('appointments')
     .insert([appointment])
-    .select()
+    .select() as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data[0] as Appointment
+  if (!data || !data[0]) throw new Error('Failed to create appointment')
+  return data[0]
 }
 
 export async function updateAppointment(id: string, updates: Partial<Appointment>) {
@@ -54,10 +67,14 @@ export async function updateAppointment(id: string, updates: Partial<Appointment
     .from('appointments')
     .update(updates)
     .eq('id', id)
-    .select()
+    .select() as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data[0] as Appointment
+  if (!data || !data[0]) throw new Error('Failed to update appointment')
+  return data[0]
 }
 
 export async function getReviews(userId: string) {
@@ -66,10 +83,14 @@ export async function getReviews(userId: string) {
     .from('reviews')
     .select('*')
     .eq('client_id', userId)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }) as {
+      data: Review[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Review[]
+  if (!data) return []
+  return data
 }
 
 export async function createReview(review: Partial<Review>) {
@@ -77,10 +98,14 @@ export async function createReview(review: Partial<Review>) {
   const { data, error } = await supabase
     .from('reviews')
     .insert([review])
-    .select()
+    .select() as {
+      data: Review[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data[0] as Review
+  if (!data || !data[0]) throw new Error('Failed to create review')
+  return data[0]
 }
 
 export async function updateReview(id: string, updates: Partial<Review>) {
@@ -89,10 +114,14 @@ export async function updateReview(id: string, updates: Partial<Review>) {
     .from('reviews')
     .update(updates)
     .eq('id', id)
-    .select()
+    .select() as {
+      data: Review[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data[0] as Review
+  if (!data || !data[0]) throw new Error('Failed to update review')
+  return data[0]
 }
 
 export async function getNotifications(userId: string) {
@@ -101,10 +130,14 @@ export async function getNotifications(userId: string) {
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }) as {
+      data: Notification[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Notification[]
+  if (!data) return []
+  return data
 }
 
 export async function markNotificationAsRead(id: string) {
@@ -150,10 +183,14 @@ export async function getUpcomingAppointments(userId: string) {
     .eq('client_id', userId)
     .gte('appointment_date', today.toISOString())
     .order('appointment_date', { ascending: true })
-    .limit(5)
+    .limit(5) as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Appointment[]
+  if (!data) return []
+  return data
 }
 
 export async function getPastAppointments(userId: string) {
@@ -178,10 +215,14 @@ export async function getPastAppointments(userId: string) {
     `)
     .eq('client_id', userId)
     .lt('appointment_date', today.toISOString())
-    .order('appointment_date', { ascending: false })
+    .order('appointment_date', { ascending: false }) as {
+      data: Appointment[] | null,
+      error: any
+    }
 
   if (error) throw error
-  return data as Appointment[]
+  if (!data) return []
+  return data
 }
 
 export async function checkTimeSlotAvailability(date: Date, time: string) {

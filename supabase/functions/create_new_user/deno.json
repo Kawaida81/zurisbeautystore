@@ -1,3 +1,14 @@
 {
-  "imports": {}
+  "imports": {
+    "@std/http": "jsr:@std/http@^0.218.2"
+  },
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "tasks": {
+    "dev": "deno run --watch --allow-net --allow-env --allow-read index.ts",
+    "deploy": "deployctl deploy --project=supabase-edge-functions --prod index.ts"
+  }
 }

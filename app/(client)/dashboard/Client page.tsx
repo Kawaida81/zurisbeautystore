@@ -95,6 +95,25 @@ interface Review {
   created_at: string
 }
 
+type Database = {
+  public: {
+    Tables: {
+      users: {
+        Row: User
+      }
+      services: {
+        Row: Service
+      }
+      appointments: {
+        Row: Appointment
+      }
+      reviews: {
+        Row: Review
+      }
+    }
+  }
+}
+
 // Generate available time slots
 const generateTimeSlots = (selectedDate: Date) => {
   const slots = []
@@ -182,9 +201,10 @@ export default function ClientDashboard() {
             .from('users')
             .select('*')
             .eq('id', userData.id)
-            .single()
+            .single() as { data: Database['public']['Tables']['users']['Row'] | null, error: any }
 
           if (profileError) throw profileError
+          if (!profile) throw new Error('User profile not found')
           setUser(profile)
 
           // Set up realtime subscription for appointments
@@ -200,11 +220,11 @@ export default function ClientDashboard() {
               },
               (payload) => {
                 if (payload.eventType === 'INSERT') {
-                  setAppointments(prev => [...prev, payload.new as Appointment])
+                  setAppointments(prev => [...prev, payload.new as Database['public']['Tables']['appointments']['Row']])
                 } else if (payload.eventType === 'UPDATE') {
                   setAppointments(prev =>
                     prev.map(app =>
-                      app.id === payload.new.id ? payload.new as Appointment : app
+                      app.id === payload.new.id ? payload.new as Database['public']['Tables']['appointments']['Row'] : app
                     )
                   )
                 }
@@ -217,10 +237,10 @@ export default function ClientDashboard() {
             .from('services')
             .select('*')
             .eq('is_active', true)
-            .order('name')
+            .order('name') as { data: Database['public']['Tables']['services']['Row'][] | null, error: any }
 
           if (servicesError) throw servicesError
-          setServices(servicesData)
+          setServices(servicesData || [])
 
           // Fetch appointments
           await fetchAppointments()
@@ -250,10 +270,13 @@ export default function ClientDashboard() {
         .from('appointments')
         .select('*')
         .eq('client_id', user.id)
-        .order('appointment_date', { ascending: true })
+        .order('created_at', { ascending: false }) as { 
+          data: Database['public']['Tables']['appointments']['Row'][] | null, 
+          error: any 
+        }
 
       if (error) throw error
-      setAppointments(data)
+      setAppointments(data || [])
     } catch (error) {
       console.error('Error fetching appointments:', error)
       toast.error('Failed to load appointments')
@@ -268,16 +291,18 @@ export default function ClientDashboard() {
       const { data, error } = await supabase
         .from('reviews')
         .select('*')
-        .eq('client_id', user.id)
+        .eq('client_id', user.id) as {
+          data: Database['public']['Tables']['reviews']['Row'][] | null,
+          error: any
+        }
 
       if (error) throw error
-      
-      // Convert array to object with appointment_id as key
-      const reviewsMap = data.reduce((acc, review) => {
+
+      const reviewsMap = (data || []).reduce((acc, review) => {
         acc[review.appointment_id] = review
         return acc
-      }, {} as { [key: string]: Review })
-      
+      }, {} as { [key: string]: Database['public']['Tables']['reviews']['Row'] })
+
       setReviews(reviewsMap)
     } catch (error) {
       console.error('Error fetching reviews:', error)
@@ -639,15 +664,19 @@ export default function ClientDashboard() {
               comment: comment.trim() || null,
             }
           ])
-          .select()
+          .select() as { 
+            data: Database['public']['Tables']['reviews']['Row'][] | null, 
+            error: any 
+          }
 
         if (error) throw error
         
-        // Update local state
+        // Update local state with proper typing
         if (data && data[0]) {
+          const newReview = data[0] as Review
           setReviews(prev => ({
             ...prev,
-            [selectedAppointment.id]: data[0]
+            [selectedAppointment.id]: newReview
           }))
         }
       }

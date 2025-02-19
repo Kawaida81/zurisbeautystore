@@ -1,70 +1,68 @@
-import { signOutAction } from "@/app/actions";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+'use client'
+
 import Link from "next/link";
 import { Badge } from "./ui/badge";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
-import { createClient } from "@/utils/supabase/server";
+import { useEffect, useState } from 'react'
 
-export default async function AuthButton() {
-  const supabase = await createClient();
+export default function HeaderAuth() {
+  const router = useRouter();
+  const supabase = createClient();
+  const [user, setUser] = useState<any>(null);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    checkUser();
+  }, [supabase.auth]);
 
-  if (!hasEnvVars) {
-    return (
-      <>
-        <div className="flex gap-4 items-center">
-          <div>
-            <Badge
-              variant={"default"}
-              className="font-normal pointer-events-none"
-            >
-              Please update .env.local file with anon key and url
-            </Badge>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              asChild
-              size="sm"
-              variant={"outline"}
-              disabled
-              className="opacity-75 cursor-none pointer-events-none"
-            >
-              <Link href="/sign-in">Sign in</Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              variant={"default"}
-              disabled
-              className="opacity-75 cursor-none pointer-events-none"
-            >
-              <Link href="/sign-up">Sign up</Link>
-            </Button>
-          </div>
-        </div>
-      </>
-    );
-  }
-  return user ? (
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    router.push("/sign-in");
+    router.refresh();
+  };
+
+  return (
     <div className="flex items-center gap-4">
-      Hey, {user.email}!
-      <form action={signOutAction}>
-        <Button type="submit" variant={"outline"}>
-          Sign out
-        </Button>
-      </form>
-    </div>
-  ) : (
-    <div className="flex gap-2">
-      <Button asChild size="sm" variant={"outline"}>
-        <Link href="/sign-in">Sign in</Link>
-      </Button>
-      <Button asChild size="sm" variant={"default"}>
-        <Link href="/sign-up">Sign up</Link>
-      </Button>
+      {user ? (
+        <>
+          <span className="text-sm text-gray-600">
+            {user.email}
+          </span>
+          <Button
+            variant="ghost"
+            className="text-sm font-medium hover:underline underline-offset-4"
+            onClick={handleSignOut}
+          >
+            Sign Out
+          </Button>
+        </>
+      ) : (
+        <>
+          <Link
+            href="/sign-in"
+            className="text-sm font-medium hover:underline underline-offset-4"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/sign-up"
+            className="text-sm font-medium hover:underline underline-offset-4"
+          >
+            Sign Up
+          </Link>
+        </>
+      )}
+      {(!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) && (
+        <Badge variant="destructive" className="rounded-sm">
+          Missing env vars
+        </Badge>
+      )}
     </div>
   );
 }
