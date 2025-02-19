@@ -5,9 +5,10 @@ compatibility_flags = ["nodejs_compat"]
 [build]
 command = "npm run build"
 output_directory = ".next"
+node_version = "20.11.1"
 
 [env.production]
-NODE_VERSION = "20.11.0"
+NODE_VERSION = "20.11.1"
 
 [site]
 bucket = ".next" 
