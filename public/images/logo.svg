@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#FF6B6B"/>
+  
+  <!-- Stylized Z -->
+  <path d="M80 70H176M80 186H176M176 70L80 186" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Beauty elements -->
+  <path d="M128 40C150 60 150 80 128 100C106 80 106 60 128 40Z" fill="white"/>
+  <path d="M128 156C150 176 150 196 128 216C106 196 106 176 128 156Z" fill="white"/>
+</svg> 
