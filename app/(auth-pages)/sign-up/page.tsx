@@ -101,6 +101,26 @@ export default function SignUpPage() {
         throw new Error('An account with this email already exists');
       }
 
+      // Create user profile first
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .insert([
+          {
+            email: data.email,
+            full_name: data.fullName,
+            phone: data.phone || null,
+            role: data.role,
+            is_active: true
+          }
+        ])
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        throw new Error('Failed to create user profile. Please try again.');
+      }
+
       // Sign up the user with role and metadata
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
@@ -117,39 +137,36 @@ export default function SignUpPage() {
       });
 
       if (signUpError) {
+        // If auth signup fails, delete the profile
+        await supabase
+          .from('users')
+          .delete()
+          .eq('email', data.email);
+        
         console.error('Sign up error:', signUpError);
         throw new Error(signUpError.message || 'Failed to create account');
       }
 
       if (!authData.user) {
+        // If no user data, delete the profile
+        await supabase
+          .from('users')
+          .delete()
+          .eq('email', data.email);
+        
         throw new Error('No user data returned from signup');
       }
 
-      // Create user profile in the users table
-      const { error: profileError } = await supabase
+      // Update the profile with the auth user ID
+      const { error: updateError } = await supabase
         .from('users')
-        .insert([
-          {
-            id: authData.user.id,
-            email: data.email,
-            full_name: data.fullName,
-            phone: data.phone || null,
-            role: data.role,
-            is_active: true
-          }
-        ]);
+        .update({ id: authData.user.id })
+        .eq('email', data.email);
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // Attempt to delete the auth user if profile creation fails
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        throw new Error('Failed to create user profile. Please try again.');
-      }
-
-      // Verify profile creation
-      const profile = await verifyUserProfile(supabase, authData.user.id);
-      if (!profile) {
-        throw new Error('Failed to verify user profile creation. Please try again.');
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        // Don't throw here, as the user is already created
+        toast.error('Warning: Profile update incomplete. Some features may be limited.');
       }
 
       // Show success message and redirect
@@ -248,7 +265,10 @@ export default function SignUpPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Account Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger className="h-12">
                           <SelectValue placeholder="Select your account type" />
@@ -274,20 +294,19 @@ export default function SignUpPage() {
                       <div className="relative">
                         <Input
                           type={showPassword ? "text" : "password"}
-                          placeholder="Create a password"
-                          className="h-12"
+                          placeholder="Enter your password"
+                          className="h-12 pr-10"
                           {...field}
                         />
                         <button
                           type="button"
-                          tabIndex={-1}
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                          className="absolute right-3 top-1/2 -translate-y-1/2"
                         >
                           {showPassword ? (
-                            <EyeOff className="h-4 w-4" />
+                            <EyeOff className="h-5 w-5 text-gray-500" />
                           ) : (
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-5 w-5 text-gray-500" />
                           )}
                         </button>
                       </div>
@@ -308,19 +327,20 @@ export default function SignUpPage() {
                         <Input
                           type={showConfirmPassword ? "text" : "password"}
                           placeholder="Confirm your password"
-                          className="h-12"
+                          className="h-12 pr-10"
                           {...field}
                         />
                         <button
                           type="button"
-                          tabIndex={-1}
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                          onClick={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2"
                         >
                           {showConfirmPassword ? (
-                            <EyeOff className="h-4 w-4" />
+                            <EyeOff className="h-5 w-5 text-gray-500" />
                           ) : (
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-5 w-5 text-gray-500" />
                           )}
                         </button>
                       </div>
@@ -330,35 +350,25 @@ export default function SignUpPage() {
                 )}
               />
 
-              <div className="text-sm text-center text-gray-500">
-                By signing up, you agree to our{" "}
-                <Link href="/terms" className="text-[#FF6B6B] hover:underline">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link href="/privacy" className="text-[#FF6B6B] hover:underline">
-                  Privacy Policy
-                </Link>
-              </div>
-
               <Button
                 type="submit"
-                className="w-full h-12 bg-[#FF6B6B] hover:bg-[#FF6B6B]/90"
+                className="w-full h-12 bg-[#FF6B6B] hover:bg-[#FF5252]"
                 disabled={isLoading}
               >
                 {isLoading ? "Creating account..." : "Create account"}
               </Button>
-
-              <div className="text-center">
-                <Link
-                  href="/sign-in"
-                  className="text-sm font-medium text-[#FF6B6B] hover:text-[#FF6B6B]/90"
-                >
-                  Already have an account? Sign in
-                </Link>
-              </div>
             </form>
           </Form>
+
+          <p className="mt-4 text-center text-sm">
+            Already have an account?{" "}
+            <Link
+              href="/sign-in"
+              className="font-medium text-[#FF6B6B] hover:text-[#FF5252]"
+            >
+              Sign in
+            </Link>
+          </p>
         </div>
       </div>
     </div>
