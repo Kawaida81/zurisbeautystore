@@ -1,9 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export async function resetPasswordAction(formData: FormData) {
-  'use server'
-  
   const password = formData.get('password') as string
   const confirmPassword = formData.get('confirmPassword') as string
 
@@ -16,14 +13,15 @@ export async function resetPasswordAction(formData: FormData) {
   }
 
   try {
-    const supabase = createClient()
+    const supabase = createClientComponentClient()
     const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
       return { error: error.message }
     }
 
-    return redirect('/sign-in?message=Password updated successfully')
+    window.location.href = '/sign-in?message=Password updated successfully'
+    return { success: true }
   } catch (error: any) {
     return { error: error.message || 'An error occurred while resetting your password' }
   }

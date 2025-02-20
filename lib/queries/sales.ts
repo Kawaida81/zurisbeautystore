@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/server';
 import type {
   Sale,
   SaleResponse,
@@ -26,6 +26,8 @@ interface SearchSalesResult {
   total_count: number;
 }
 
+export const runtime = "edge";
+
 // Fetch a single sale by ID
 export async function getSaleById(saleId: string): Promise<SaleResponse> {
   try {
@@ -51,7 +53,7 @@ export async function getSaleById(saleId: string): Promise<SaleResponse> {
 
     // Get service details for the services in the sale
     if (data && data.services && Array.isArray(data.services)) {
-      const serviceIds = data.services.map(s => s.service_id);
+      const serviceIds = data.services.map((s: { service_id: string }) => s.service_id);
       if (serviceIds.length > 0) {
         const { data: servicesData, error: servicesError } = await supabase
           .from('services')

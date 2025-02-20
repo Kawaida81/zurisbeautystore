@@ -1,19 +1,32 @@
+'use client';
+
 import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
-import { createClient } from "@/lib/supabase/server";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { InfoIcon } from "lucide-react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 
-export default async function ProtectedPage() {
-  const supabase = await createClient();
+export default function ProtectedPage() {
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    async function checkUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/sign-in");
+      } else {
+        setUser(user);
+      }
+    }
+    checkUser();
+  }, [router, supabase.auth]);
 
   if (!user) {
-    return redirect("/sign-in");
+    return null;
   }
 
   return (

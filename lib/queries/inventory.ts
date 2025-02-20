@@ -21,6 +21,8 @@ type Tables = Database['public']['Tables']
 type Products = Tables['products']['Row']
 type Categories = Tables['product_categories']['Row']
 
+export const runtime = "edge"
+
 // Get a single product by ID
 export async function getProductById(productId: string): Promise<ProductResponse> {
   try {

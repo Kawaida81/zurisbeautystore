@@ -1,14 +1,4 @@
 name = "zurisbeautystore"
-compatibility_date = "2024-02-15"
+compatibility_date = "2024-02-20"
 compatibility_flags = ["nodejs_compat"]
-
-[build]
-command = "npm run pages:build"
-output_directory = ".vercel/output/static"
-node_version = "20.11.1"
-
-[env.production]
-NODE_VERSION = "20.11.1"
-
-[site]
-bucket = ".next" 
+pages_build_output_dir = ".vercel/output/static" 

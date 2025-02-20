@@ -1,6 +1,8 @@
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import type { Appointment, Service, Review, Notification } from '@/lib/types'
 import { Database } from '@/lib/types/database'
+
+export const runtime = "edge"
 
 export async function getServices() {
   const supabase = createClient()

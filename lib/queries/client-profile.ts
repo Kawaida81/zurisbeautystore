@@ -1,7 +1,9 @@
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import type { ClientProfile, ClientProfileFormData, ClientStats, ClientProfileWithRelations } from '@/lib/types/client'
 import type { Appointment, Service, User } from '@/lib/types'
-import { Database } from '@/lib/types/database'
+import type { Database } from '@/lib/database.types'
+
+export const runtime = "edge"
 
 interface ProfileResponse {
   profile: ClientProfileWithRelations

@@ -1,6 +1,9 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/lib/supabase/server'
 
 const supabase = createClientComponentClient()
+
+export const runtime = "edge"
 
 export async function getAuthenticatedUser() {
   const { data: { user }, error } = await supabase.auth.getUser()

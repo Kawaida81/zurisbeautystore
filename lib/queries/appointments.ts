@@ -11,6 +11,10 @@ import type {
   PaginatedAppointmentsResponse,
   AppointmentStats
 } from '@/lib/types/appointments'
+import { createClient as serverClient } from '@/lib/supabase/server'
+import type { Database } from '@/lib/database.types'
+
+export const runtime = "edge"
 
 // Helper function to transform appointment data
 const transformAppointment = (appointment: any): AppointmentDisplay => ({
