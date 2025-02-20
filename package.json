@@ -6,9 +6,9 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build && next export",
+    "build": "next build",
     "start": "next start",
-    "pages:build": "next build && next export",
+    "pages:build": "next build",
     "preview": "npm run build && wrangler pages dev ./out",
     "deploy": "npm run build && wrangler pages deploy ./out",
     "pages:watch": "next build --watch",
