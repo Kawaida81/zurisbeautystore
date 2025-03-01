@@ -4,6 +4,8 @@ compatibility_flags = ["nodejs_compat"]
 
 [env.production]
 NODE_VERSION = "20.11.1"
+NEXT_PUBLIC_SUPABASE_URL = "https://pxsrrupipvqyccpriceg.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4c3JydXBpcHZxeWNjcHJpY2VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzgxNjgsImV4cCI6MjA1NTcxNDE2OH0.N5L8MmF17oeUs2MVFw6oDbFA3nbw0NODdVLyoa8FxCE"
 
 [build]
 command = "npm run build"
