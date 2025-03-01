@@ -7,6 +7,7 @@ NODE_VERSION = "20.11.1"
 
 [build]
 command = "npm run build"
+output_directory = ".next"
 
 [deployment]
 routes = [
@@ -14,4 +15,7 @@ routes = [
 ]
 
 # Add Pages configuration
-pages_build_output_dir = ".next" 
+pages_build_output_dir = ".next"
+
+[site]
+bucket = ".next" 
