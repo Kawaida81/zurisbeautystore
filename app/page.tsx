@@ -1,6 +1,6 @@
-export const runtime = "edge";
-
 'use client'
+
+export const runtime = "edge";
 
 import TopBanner from '@/components/home/TopBanner'
 import Navbar from '@/components/home/Navbar'

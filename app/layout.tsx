@@ -7,8 +7,9 @@ import { SupabaseProvider } from '@/components/providers/supabase-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Zuris Beauty',
-  description: 'Book your beauty appointments with ease',
+  metadataBase: new URL('https://zurisbeautystore.pages.dev'),
+  title: "Zuri's Beauty Salon",
+  description: 'Modern beauty salon management application',
 }
 
 export default function RootLayout({
