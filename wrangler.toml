@@ -1,15 +1,14 @@
 name = "zurisbeautystore"
 compatibility_date = "2024-02-20"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "out"
+
+[env.production]
+NODE_VERSION = "20.11.1"
 
 [build]
 command = "npm run pages:build"
-nodeVersion = "20.11.1"
 
-[build.environment]
-NODE_VERSION = "20.11.1"
-
-[site]
-bucket = ".vercel/output/static"
-entry-point = "." 
+[deployment]
+routes = [
+  { pattern = "/*", zone_name = "zurisbeautystore" }
+] 
