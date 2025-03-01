@@ -7,7 +7,7 @@ NODE_VERSION = "18.17.1"
 
 
 [build]
-command = "npm run build"
+command = "npm run pages:build"
 output_directory = ".next"
 
 [deployment]
@@ -16,10 +16,15 @@ routes = [
 ]
 
 # Add Pages configuration
-pages_build_output_dir = ".next"
+pages_build_output_dir = ".next/standalone"
 
 [site]
 bucket = ".next"
+exclude = [
+    "**/*.pack",
+    "**/cache/**",
+    "**/_next/cache/**"
+]
 
 [vars]
 NEXT_PUBLIC_SUPABASE_URL = "https://pxsrrupipvqyccpriceg.supabase.co"

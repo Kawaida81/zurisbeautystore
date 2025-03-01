@@ -13,11 +13,23 @@ const nextConfig = {
     unoptimized: true,
     domains: ['pxsrrupipvqyccpriceg.supabase.co']
   },
-  // Keep your existing config options here
+  output: 'standalone',
   swcMinify: true,
   reactStrictMode: true,
   experimental: {
     serverActions: true
+  },
+  webpack: (config) => {
+    config.optimization.splitChunks = {
+      chunks: 'all',
+      minSize: 20000,
+      maxSize: 24000000,
+      cacheGroups: {
+        default: false,
+        vendors: false
+      }
+    };
+    return config;
   }
 }
 
