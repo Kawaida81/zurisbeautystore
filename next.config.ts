@@ -1,4 +1,4 @@
-/** @type {import('next').NextConfig} */
+///** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable static exports for Cloudflare Pages
   output: 'export',

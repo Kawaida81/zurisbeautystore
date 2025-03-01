@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +31,16 @@ interface UserProfile {
   role: 'client' | 'worker' | 'admin'
   is_active: boolean
   created_at: string
+}
+
+interface CompleteProfile {
+  id: string
+  email: string
+  full_name: string
+  phone: string | null
+  role: 'client' | 'worker' | 'admin'
+  is_active: boolean
+  created_at: string
   client_profile: ClientProfile
   preferred_worker: {
     id: string
@@ -42,12 +52,12 @@ interface UserProfile {
 }
 
 interface ProfileResponse {
-  profile: UserProfile
+  profile: CompleteProfile
 }
 
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profile, setProfile] = useState<CompleteProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editedProfile, setEditedProfile] = useState<Partial<ClientProfile>>({})
@@ -71,7 +81,7 @@ export default function ProfilePage() {
         }
 
         // Get client profile
-        const { data, error: profileError } = await supabase
+        const { data: rpcResponse, error: profileError } = await supabase
           .rpc('get_client_profile', {
             p_client_id: user.id
           })
@@ -80,23 +90,60 @@ export default function ProfilePage() {
           console.error('Profile fetch error:', JSON.stringify(profileError))
           throw new Error('Failed to fetch profile: ' + (profileError.message || 'Unknown error'))
         }
-        if (!data) {
-          throw new Error('No profile data returned from server')
+
+        // Debug logging
+        console.log('Raw RPC response:', rpcResponse)
+
+        // Handle empty response
+        if (!rpcResponse || (Array.isArray(rpcResponse) && rpcResponse.length === 0)) {
+          // Try to create a new profile
+          const { error: createError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: user.id,
+              preferred_contact: 'email',
+              total_visits: 0,
+              total_spent: 0,
+              loyalty_points: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+
+          if (createError) {
+            console.error('Error creating profile:', createError)
+            throw new Error('Failed to create profile')
+          }
+
+          // Retry fetching the profile
+          const { data: retryResponse, error: retryError } = await supabase
+            .rpc('get_client_profile', {
+              p_client_id: user.id
+            })
+
+          if (retryError) {
+            throw new Error('Failed to fetch profile after creation')
+          }
+
+          const retryData = retryResponse as ProfileResponse
+          if (!retryData?.profile) {
+            throw new Error('Invalid profile data structure after creation')
+          }
+
+          // Set the profile data
+          setProfile(retryData.profile)
+          setEditedProfile(retryData.profile.client_profile)
+          return
         }
 
-        // Parse the JSONB response
-        const profileData = data as { profile: UserProfile }
-        if (!profileData.profile) {
+        const data = rpcResponse as ProfileResponse
+        if (!data?.profile || typeof data.profile !== 'object') {
+          console.error('Invalid profile data structure:', data)
           throw new Error('Invalid profile data structure')
         }
 
-        // Validate profile data
-        if (!profileData.profile.client_profile) {
-          throw new Error('Client profile data is missing')
-        }
-
-        setProfile(profileData.profile)
-        setEditedProfile(profileData.profile.client_profile)
+        // Set the profile data
+        setProfile(data.profile)
+        setEditedProfile(data.profile.client_profile)
       } catch (err) {
         console.error('Error fetching profile:', err)
         setError(err instanceof Error ? err.message : 'An error occurred')
@@ -256,127 +303,94 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Profile Content */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Basic Information Card */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50">
-                <CardTitle className="flex items-center gap-2 text-gray-700">
-                  <User className="w-5 h-5 text-[#FF6B6B]" />
-                  Basic Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 pt-6">
-                <div className="space-y-2">
-                  <Label className="text-gray-500 flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    Email
-                  </Label>
-                  <Input value={profile.email} readOnly className="bg-gray-50" />
+          {/* Basic Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Email</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Mail className="h-4 w-4 text-gray-500" />
+                  <span>{profile.email}</span>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-500 flex items-center gap-2">
-                    <Phone className="w-4 h-4" />
-                    Phone
-                  </Label>
-                  <Input value={profile.phone || ''} readOnly className="bg-gray-50" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  <span>{profile.phone || 'Not provided'}</span>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-500">Preferred Contact Method</Label>
-                  {isEditing ? (
-                    <Select
-                      value={editedProfile.preferred_contact}
-                      onValueChange={(value) => handleInputChange('preferred_contact', value)}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Select contact method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="phone">Phone</SelectItem>
-                        <SelectItem value="sms">SMS</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input 
-                      value={profile.client_profile.preferred_contact.charAt(0).toUpperCase() + 
-                             profile.client_profile.preferred_contact.slice(1)} 
-                      readOnly 
-                      className="bg-gray-50"
-                    />
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Profile Details Card */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
-            <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
-              <CardHeader className="border-b border-gray-100 bg-gray-50/50">
-                <CardTitle className="flex items-center gap-2 text-gray-700">
-                  <Star className="w-5 h-5 text-[#FF6B6B]" />
-                  Profile Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 pt-6">
-                <div className="space-y-2">
-                  <Label className="text-gray-500 flex items-center gap-2">
-                    <Award className="w-4 h-4" />
-                    Loyalty Points
-                  </Label>
-                  <Input 
-                    value={profile.client_profile.loyalty_points.toString()} 
-                    readOnly 
-                    className="bg-gray-50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-500 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Total Visits
-                  </Label>
-                  <Input 
-                    value={profile.client_profile.total_visits.toString()} 
-                    readOnly 
-                    className="bg-gray-50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-500 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4" />
-                    Total Spent
-                  </Label>
-                  <Input 
-                    value={`$${profile.client_profile.total_spent.toFixed(2)}`} 
-                    readOnly 
-                    className="bg-gray-50"
-                  />
-                </div>
-                {profile.client_profile.last_visit_date && (
-                  <div className="space-y-2">
-                    <Label className="text-gray-500 flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      Last Visit
-                    </Label>
-                    <Input 
-                      value={new Date(profile.client_profile.last_visit_date).toLocaleDateString()} 
-                      readOnly 
-                      className="bg-gray-50"
-                    />
+              </div>
+              <div>
+                <Label>Preferred Contact Method</Label>
+                {isEditing ? (
+                  <Select
+                    value={editedProfile.preferred_contact}
+                    onValueChange={(value) => handleInputChange('preferred_contact', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select contact method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Star className="h-4 w-4 text-gray-500" />
+                    <span className="capitalize">{profile.client_profile.preferred_contact}</span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </motion.div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Statistics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Statistics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Last Visit</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>
+                    {profile.client_profile.last_visit_date
+                      ? new Date(profile.client_profile.last_visit_date).toLocaleDateString()
+                      : 'No visits yet'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <Label>Total Visits</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Star className="h-4 w-4 text-gray-500" />
+                  <span>{profile.client_profile.total_visits}</span>
+                </div>
+              </div>
+              <div>
+                <Label>Total Spent</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <DollarSign className="h-4 w-4 text-gray-500" />
+                  <span>Kes {profile.client_profile.total_spent.toFixed(2)}</span>
+                </div>
+              </div>
+              <div>
+                <Label>Loyalty Points</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Award className="h-4 w-4 text-gray-500" />
+                  <span>{profile.client_profile.loyalty_points} points</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </motion.div>
     </div>

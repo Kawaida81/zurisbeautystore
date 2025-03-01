@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/client';
 import type {
   Sale,
   SaleResponse,
@@ -158,105 +158,51 @@ export async function createSale(input: CreateSaleInput): Promise<SaleResponse> 
       throw new Error('User not authenticated');
     }
 
-    let initialAmount = 0;
+    // Verify user is a worker
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single();
 
-    // If it's a service sale, calculate total from all services
+    if (userError || !userData) {
+      console.error('User verification error:', userError);
+      throw new Error('Failed to verify user role');
+    }
+
+    if (userData.role !== 'worker' || !userData.is_active) {
+      throw new Error('Unauthorized: Only active workers can create sales');
+    }
+
+    // Calculate initial amount from services
+    let totalAmount = 0;
     if (input.sale_type === 'service' && input.services && input.services.length > 0) {
-      initialAmount = input.services.reduce((total, service) => total + service.price, 0);
+      totalAmount = input.services.reduce((total, service) => total + service.price, 0);
     }
 
-    // Create the sale record
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        client_id: input.client_id || null,
-        services: input.services || [],
-        payment_method: input.payment_method,
-        sale_type: input.sale_type,
-        payment_status: 'completed',
-        worker_id: user.id,
-        total_amount: initialAmount,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select()
-      .single() as { 
-        data: { id: string } | null; 
-        error: Error | null 
-      };
+    // Begin transaction using RPC
+    const { data: saleResult, error: saleError } = await supabase
+      .rpc('process_sale', {
+        p_client_id: input.client_id || null,
+        p_worker_id: user.id,
+        p_services: input.services || [],
+        p_items: input.items || [],
+        p_payment_method: input.payment_method,
+        p_payment_status: 'completed'
+      });
 
-    if (saleError) {
-      console.error('Sale creation error:', saleError);
-      throw new Error(`Failed to create sale: ${saleError.message}`);
+    if (saleError || !saleResult || !saleResult.success) {
+      console.error('Sale creation error:', saleError || saleResult?.message);
+      throw new Error(saleError?.message || saleResult?.message || 'Failed to create sale');
     }
 
-    if (!sale || !sale.id) {
-      throw new Error('No sale data returned after creation');
-    }
-
-    const saleId: string = sale.id;
-    let totalAmount = initialAmount;
-
-    // If there are items, create sale items and update stock
-    if (input.items && input.items.length > 0) {
-      for (const item of input.items) {
-        // Create sale item
-        const { error: itemError } = await supabase
-          .from('sale_items')
-          .insert({
-            sale_id: sale.id,
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total_price: item.quantity * item.unit_price,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-
-        if (itemError) {
-          // If there's an error, delete the sale and throw
-          await supabase.from('sales').delete().eq('id', sale.id);
-          throw new Error(`Failed to create sale item: ${itemError.message}`);
-        }
-
-        totalAmount += item.quantity * item.unit_price;
-
-        // Update product stock
-        const { data: stockResult, error: stockError } = await supabase
-          .rpc('decrement_product_stock', {
-            p_product_id: item.product_id,
-            p_quantity: item.quantity
-          }) as { data: StockUpdateResponse | null, error: Error | null };
-
-        if (stockError || (stockResult && !stockResult.success)) {
-          // If there's an error, delete the sale and throw
-          await supabase.from('sales').delete().eq('id', sale.id);
-          throw new Error(stockError?.message || stockResult?.message || 'Failed to update product stock');
-        }
-      }
-
-      // Only update the total amount if it changed from products
-      if (totalAmount !== initialAmount) {
-        const { error: updateError } = await supabase
-          .from('sales')
-          .update({ total_amount: totalAmount })
-          .eq('id', sale.id);
-
-        if (updateError) {
-          // If there's an error, delete the sale and throw
-          await supabase.from('sales').delete().eq('id', sale.id);
-          throw new Error(`Failed to update sale total: ${updateError.message}`);
-        }
-      }
-    }
-
-    // Fetch the complete sale data
-    return await getSaleById(saleId);
-  } catch (error: unknown) {
+    // Fetch and return the created sale
+    return await getSaleById(saleResult.sale_id);
+  } catch (error) {
     console.error('Error creating sale:', error);
-    return { 
-      data: null, 
-      error: error instanceof Error ? error : new Error('An unexpected error occurred while creating the sale')
+    return {
+      data: null,
+      error: error as Error
     };
   }
 }

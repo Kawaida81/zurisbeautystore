@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSupabase } from '@/components/providers/supabase-provider'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -59,9 +61,11 @@ interface SaleState {
 }
 
 export default function WorkerSales() {
+  const router = useRouter()
+  const { user } = useSupabase()
   const { toast } = useToast()
   const [state, setState] = useState<SaleState>({
-    loading: false,
+    loading: true,
     products: [],
     services: [],
     selectedItems: [],
@@ -74,7 +78,10 @@ export default function WorkerSales() {
   const [sales, setSales] = useState<Sale[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filters, setFilters] = useState<SaleFilters>({
+    sale_type: undefined,
+    payment_status: undefined
+  })
   const ITEMS_PER_PAGE = 10
 
   const {
@@ -93,21 +100,64 @@ export default function WorkerSales() {
   }
 
   useEffect(() => {
-    void fetchSales()
-    void fetchProducts()
-    void fetchServices()
-  }, [])
+    checkWorkerAccess()
+  }, [user])
+
+  const checkWorkerAccess = async () => {
+    try {
+      if (!user) {
+        router.push('/sign-in')
+        return
+      }
+
+      const supabase = createClient()
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, is_active')
+        .eq('id', user.id)
+        .single()
+
+      if (userError || !userData) {
+        throw new Error('Failed to verify user role')
+      }
+
+      if (userData.role !== 'worker' || !userData.is_active) {
+        router.push('/dashboard')
+        return
+      }
+
+      // Only fetch data if worker access is verified
+      await Promise.all([
+        fetchSales(),
+        fetchProducts(),
+        fetchServices()
+      ])
+    } catch (error) {
+      console.error('Error checking worker access:', error)
+      toast({
+        title: "Access Error",
+        description: error instanceof Error ? error.message : "Failed to verify access",
+        variant: "destructive"
+      })
+      router.push('/dashboard')
+    } finally {
+      updateState({ loading: false })
+    }
+  }
 
   useEffect(() => {
     void fetchSales()
-  }, [searchQuery, currentPage])
+  }, [filters, currentPage])
 
   const fetchSales = async () => {
     try {
       updateState({ loading: true })
       
-      // Prepare filters
-      const filters: SaleFilters = {}
+      // Prepare filters with current filter state
+      const searchFilters: SaleFilters = {
+        ...filters,
+        worker_id: undefined // Will be set below
+      }
 
       // Get current user
       const supabase = createClient()
@@ -123,16 +173,11 @@ export default function WorkerSales() {
       }
 
       console.log('Fetching sales for worker:', user.id);
-      filters.worker_id = user.id
-
-      // Add search query to filters if present
-      if (searchQuery.trim()) {
-        filters.search_query = searchQuery.trim()
-      }
+      searchFilters.worker_id = user.id
 
       // Use the getSales query function with pagination
       const { data, error, count } = await getSales(
-        filters,
+        searchFilters,
         { page: currentPage, limit: ITEMS_PER_PAGE }
       )
       
@@ -326,62 +371,61 @@ export default function WorkerSales() {
 
   const handleAddSale = async () => {
     try {
-      updateState({ loading: true });
+      if (!user) {
+        throw new Error('You must be logged in to create a sale')
+      }
 
+      updateState({ loading: true })
+
+      // Prepare sale input
       const saleInput: CreateSaleInput = {
         sale_type: saleType,
-        payment_method: paymentMethod
-      };
-
-      if (saleType === 'service' && selectedServices.length > 0) {
-        saleInput.services = selectedServices.map(service => ({
-          service_id: service.id,
-          price: service.price
-        }));
-      } else if (saleType === 'product' && selectedItems.length > 0) {
-        saleInput.items = selectedItems.map(item => {
-          const product = products.find(p => p.id === item.id);
-          if (!product) throw new Error(`Product not found: ${item.id}`);
-          
+        payment_method: paymentMethod,
+        items: selectedItems.map(item => {
+          const product = products.find(p => p.id === item.id)
+          if (!product) throw new Error(`Product not found: ${item.id}`)
           return {
             product_id: item.id,
             quantity: item.quantity,
             unit_price: product.price
-          };
-        });
-      } else {
-        throw new Error('Invalid sale: No items or services selected');
+          }
+        }),
+        services: selectedServices.map(service => {
+          const serviceData = services.find(s => s.id === service.id)
+          if (!serviceData) throw new Error(`Service not found: ${service.id}`)
+          return {
+            service_id: service.id,
+            price: serviceData.price
+          }
+        })
       }
 
-      const { data, error } = await createSale(saleInput);
+      const { data, error } = await createSale(saleInput)
+      if (error) throw error
 
-      if (error) throw error;
+      toast({
+        title: "Success",
+        description: "Sale created successfully",
+      })
 
-      if (data) {
-        toast({
-          title: "Success",
-          description: "Sale created successfully",
-        });
-        
-        updateState({ 
-          showNewSaleDialog: false,
-          selectedItems: [],
-          selectedServices: []
-        });
-        
-        void fetchSales();
-      }
+      // Reset form and refresh data
+      updateState({
+        selectedItems: [],
+        selectedServices: [],
+        showNewSaleDialog: false
+      })
+      await fetchSales()
     } catch (error) {
-      console.error('Error creating sale:', error);
+      console.error('Error creating sale:', error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create sale",
-        variant: "destructive",
-      });
+        variant: "destructive"
+      })
     } finally {
-      updateState({ loading: false });
+      updateState({ loading: false })
     }
-  };
+  }
 
   const resetSaleForm = () => {
     updateState({
@@ -443,6 +487,21 @@ export default function WorkerSales() {
   }
 
   const stats = calculateStats()
+
+  const handleFilterChange = (key: keyof SaleFilters, value: string | null) => {
+    if (key === 'sale_type') {
+      setFilters(prev => ({ 
+        ...prev, 
+        [key]: value as SaleType | undefined
+      }))
+    } else if (key === 'payment_status') {
+      setFilters(prev => ({ 
+        ...prev, 
+        [key]: value as PaymentStatus | undefined
+      }))
+    }
+    setCurrentPage(1)
+  }
 
   if (loading) {
     return (
@@ -511,18 +570,56 @@ export default function WorkerSales() {
       </div>
 
       {/* Search Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search by service, product, or client name..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setCurrentPage(1) // Reset to first page when search changes
-            }}
-            className="pl-9 h-10"
-          />
+      <div className="p-6">
+        <div className="mb-6 space-y-4">
+          <h1 className="text-2xl font-bold">Sales Management</h1>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex gap-4">
+              <Select
+                value={filters.sale_type ?? "all"}
+                onValueChange={(value) => handleFilterChange('sale_type', value === "all" ? null : value)}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sale Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="product">Product</SelectItem>
+                  <SelectItem value="service">Service</SelectItem>
+                  <SelectItem value="combined">Combined</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.payment_status ?? "all"}
+                onValueChange={(value) => handleFilterChange('payment_status', value === "all" ? null : value)}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Payment Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFilters({
+                    sale_type: undefined,
+                    payment_status: undefined
+                  })
+                  setCurrentPage(1)
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

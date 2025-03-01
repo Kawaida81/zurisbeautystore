@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSupabase } from '@/components/providers/supabase-provider'
 import { createClient } from '@/lib/supabase/client'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default function ClientLayout({
   children,
@@ -45,5 +46,12 @@ export default function ClientLayout({
     )
   }
 
-  return <>{children}</>
+  return (
+    <div className="relative">
+      <div className="fixed top-4 right-4 z-50">
+        <NotificationBell />
+      </div>
+      {children}
+    </div>
+  )
 } 

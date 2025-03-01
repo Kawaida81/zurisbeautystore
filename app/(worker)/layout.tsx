@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSupabase } from '@/components/providers/supabase-provider'
 import { createClient } from '@/lib/supabase/client'
@@ -10,32 +10,43 @@ export default function WorkerLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading } = useSupabase()
   const router = useRouter()
+  const { user } = useSupabase()
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkWorkerAccess = async () => {
-      if (!loading) {
+      try {
         if (!user) {
           router.push('/sign-in')
           return
         }
 
         const supabase = createClient()
-        const { data: userData, error } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('role, is_active')
           .eq('id', user.id)
           .single()
 
-        if (error || !userData || !userData.is_active || userData.role !== 'worker') {
-          router.push('/dashboard')
+        if (userError || !userData) {
+          throw new Error('Failed to verify user role')
         }
+
+        if (userData.role !== 'worker' || !userData.is_active) {
+          router.push('/dashboard')
+          return
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error('Error checking worker access:', error)
+        router.push('/dashboard')
       }
     }
 
     checkWorkerAccess()
-  }, [user, loading, router])
+  }, [user, router])
 
   if (loading) {
     return (

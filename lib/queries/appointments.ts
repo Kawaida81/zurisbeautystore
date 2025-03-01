@@ -178,12 +178,24 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
       throw new Error('User account is not active')
     }
 
+    // Get service details first
+    const { data: serviceData, error: serviceError } = await supabase
+      .from('services')
+      .select('name')
+      .eq('id', input.service_id)
+      .single()
+
+    if (serviceError || !serviceData) {
+      throw new Error('Service not found')
+    }
+
     // Create the appointment using the authenticated user's ID
     const { data, error } = await supabase
       .from('appointments')
       .insert([{
-        client_id: user.id, // Use authenticated user's ID
+        client_id: user.id,
         service_id: input.service_id,
+        service: serviceData.name,
         appointment_date: input.appointment_date,
         time: input.time,
         notes: input.notes,

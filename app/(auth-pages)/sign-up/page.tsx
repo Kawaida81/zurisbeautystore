@@ -85,43 +85,7 @@ export default function SignUpPage() {
       setIsLoading(true);
       const supabase = createClient();
 
-      // Check if user exists with better error handling
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', data.email)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking existing user:', checkError);
-        throw new Error('Error checking user existence. Please try again.');
-      }
-
-      if (existingUser) {
-        throw new Error('An account with this email already exists');
-      }
-
-      // Create user profile first
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .insert([
-          {
-            email: data.email,
-            full_name: data.fullName,
-            phone: data.phone || null,
-            role: data.role,
-            is_active: true
-          }
-        ])
-        .select()
-        .single();
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        throw new Error('Failed to create user profile. Please try again.');
-      }
-
-      // Sign up the user with role and metadata
+      // Sign up the user and let the database trigger handle profile creation
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -129,7 +93,6 @@ export default function SignUpPage() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: data.fullName,
-            email: data.email,
             role: data.role,
             phone: data.phone || null
           }
@@ -137,36 +100,22 @@ export default function SignUpPage() {
       });
 
       if (signUpError) {
-        // If auth signup fails, delete the profile
-        await supabase
-          .from('users')
-          .delete()
-          .eq('email', data.email);
-        
         console.error('Sign up error:', signUpError);
         throw new Error(signUpError.message || 'Failed to create account');
       }
 
       if (!authData.user) {
-        // If no user data, delete the profile
-        await supabase
-          .from('users')
-          .delete()
-          .eq('email', data.email);
-        
         throw new Error('No user data returned from signup');
       }
 
-      // Update the profile with the auth user ID
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ id: authData.user.id })
-        .eq('email', data.email);
+      // Wait briefly to allow the trigger to create the profile
+      await wait(1000);
 
-      if (updateError) {
-        console.error('Profile update error:', updateError);
-        // Don't throw here, as the user is already created
-        toast.error('Warning: Profile update incomplete. Some features may be limited.');
+      // Verify profile creation
+      const profile = await verifyUserProfile(supabase, authData.user.id);
+      if (!profile) {
+        console.error('Profile verification failed');
+        toast.error('Account created but profile setup may be incomplete. Please contact support.');
       }
 
       // Show success message and redirect

@@ -1,11 +1,11 @@
 // Payment method types
-export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mpesa';
+export type PaymentMethod = 'cash' | 'card' | 'transfer';
 
 // Payment status types
-export type PaymentStatus = 'pending' | 'completed' | 'refunded' | 'failed';
+export type PaymentStatus = 'pending' | 'completed' | 'failed';
 
 // Sale type
-export type SaleType = 'product' | 'service' | 'package';
+export type SaleType = 'product' | 'service' | 'combined';
 
 // Base interfaces
 export interface Product {
@@ -124,14 +124,14 @@ export interface SaleStats {
 
 // Filter types
 export interface SaleFilters {
-  start_date?: string;
-  end_date?: string;
+  worker_id?: string;
+  client_id?: string;
   sale_type?: SaleType;
   payment_status?: PaymentStatus;
   payment_method?: PaymentMethod;
-  worker_id?: string;
-  client_id?: string;
   search_query?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 // Pagination types

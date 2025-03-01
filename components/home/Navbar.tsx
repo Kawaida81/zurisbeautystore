@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
 import { Search, ShoppingCart, User, Menu } from 'lucide-react'
 import { Input } from '../ui/input'
 import { useSupabase } from '../providers/supabase-provider'
@@ -13,11 +14,26 @@ const Navbar: React.FC<NavbarProps> = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
   const [authUser, setAuthUser] = React.useState<any>(null)
   const { user } = useSupabase()
+  const router = useRouter()
+  const pathname = usePathname()
 
   React.useEffect(() => {
     setMounted(true)
     setAuthUser(user)
   }, [user])
+
+  const handleTopSellingClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (pathname !== '/') {
+      // If not on home page, navigate to home page with hash
+      router.push('/#top-selling')
+    } else {
+      // If on home page, smooth scroll to section
+      document.getElementById('top-selling')?.scrollIntoView({ behavior: 'smooth' })
+    }
+    // Close mobile menu if open
+    setIsMenuOpen(false)
+  }
 
   // Don't render anything until after hydration
   if (!mounted) {
@@ -53,9 +69,13 @@ const Navbar: React.FC<NavbarProps> = () => {
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link href="/new-stock" className="text-white/90 hover:text-white transition-colors">
-              New Stock
-            </Link>
+            <a
+              href="/#top-selling"
+              onClick={handleTopSellingClick}
+              className="text-white/90 hover:text-white transition-colors cursor-pointer"
+            >
+              Top Selling
+            </a>
             <Link href="/products" className="text-white/90 hover:text-white transition-colors">
               Our Products
             </Link>
@@ -96,9 +116,13 @@ const Navbar: React.FC<NavbarProps> = () => {
         {isMenuOpen && mounted && (
           <div className="md:hidden py-4 border-t border-white/10">
             <div className="flex flex-col space-y-4">
-              <Link href="/new-stock" className="text-white/90 hover:text-white transition-colors">
-                New Stock
-              </Link>
+              <a
+                href="/#top-selling"
+                onClick={handleTopSellingClick}
+                className="text-white/90 hover:text-white transition-colors cursor-pointer"
+              >
+                Top Selling
+              </a>
               <Link href="/products" className="text-white/90 hover:text-white transition-colors">
                 Our Products
               </Link>
