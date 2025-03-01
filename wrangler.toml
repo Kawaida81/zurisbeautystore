@@ -6,9 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 NODE_VERSION = "20.11.1"
 
 [build]
-command = "npm run pages:build"
+command = "npm run build"
 
 [deployment]
 routes = [
   { pattern = "/*", zone_name = "zurisbeautystore" }
-] 
+]
+
+# Add Pages configuration
+pages_build_output_dir = ".next" 
