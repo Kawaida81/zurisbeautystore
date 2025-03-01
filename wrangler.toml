@@ -3,9 +3,8 @@ compatibility_date = "2024-02-20"
 compatibility_flags = ["nodejs_compat"]
 
 [env.production]
-NODE_VERSION = "20.11.1"
-NEXT_PUBLIC_SUPABASE_URL = "https://pxsrrupipvqyccpriceg.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4c3JydXBpcHZxeWNjcHJpY2VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzgxNjgsImV4cCI6MjA1NTcxNDE2OH0.N5L8MmF17oeUs2MVFw6oDbFA3nbw0NODdVLyoa8FxCE"
+NODE_VERSION = "18.17.1"
+
 
 [build]
 command = "npm run build"
@@ -20,4 +19,8 @@ routes = [
 pages_build_output_dir = ".next"
 
 [site]
-bucket = ".next" 
+bucket = ".next"
+
+[vars]
+NEXT_PUBLIC_SUPABASE_URL = "https://pxsrrupipvqyccpriceg.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4c3JydXBpcHZxeWNjcHJpY2VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzgxNjgsImV4cCI6MjA1NTcxNDE2OH0.N5L8MmF17oeUs2MVFw6oDbFA3nbw0NODdVLyoa8FxCE" 

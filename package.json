@@ -2,13 +2,13 @@
   "$schema": "https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/package.json",
   "private": true,
   "engines": {
-    "node": "20.11.1"
+    "node": "18.17.1"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "pages:build": "next build && npx @cloudflare/next-on-pages@1",
+    "pages:build": "next build && npx @cloudflare/next-on-pages",
     "pages:dev": "npx wrangler pages dev .next --compatibility-date=2024-02-20",
     "pages:deploy": "npx wrangler pages deploy .next"
   },
@@ -28,7 +28,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
-    "@supabase/ssr": "^0.1.0",
+    "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.39.3",
     "@tanstack/react-query": "^5.66.0",
     "autoprefixer": "^10.4.20",
@@ -38,7 +38,7 @@
     "date-fns": "^4.1.0",
     "framer-motion": "^12.4.3",
     "lucide-react": "^0.468.0",
-    "next": "13.5.6",
+    "next": "^13.5.8",
     "next-themes": "^0.4.3",
     "prettier": "^3.3.3",
     "react": "^18.2.0",
