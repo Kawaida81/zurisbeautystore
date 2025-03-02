@@ -4,11 +4,12 @@ compatibility_flags = ["nodejs_compat"]
 
 [env.production]
 NODE_VERSION = "18.17.1"
+NODE_ENV = "production"
 
 
 [build]
 command = "npm run pages:build"
-output_directory = ".next"
+output_directory = ".next/standalone"
 
 [deployment]
 routes = [
@@ -19,11 +20,16 @@ routes = [
 pages_build_output_dir = ".next/standalone"
 
 [site]
-bucket = ".next"
+bucket = ".next/standalone"
+include = [
+  ".next/static/*",
+  "public/*"
+]
 exclude = [
-    "**/*.pack",
-    "**/cache/**",
-    "**/_next/cache/**"
+  "node_modules/**/*",
+  ".git/**/*",
+  ".next/cache/**/*",
+  "**/*.pack"
 ]
 
 [vars]
