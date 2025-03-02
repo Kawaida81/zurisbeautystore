@@ -18,7 +18,13 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: true,
-    optimizePackageImports: ['@supabase/supabase-js', '@tanstack/react-query']
+    optimizePackageImports: [
+      '@supabase/supabase-js',
+      '@tanstack/react-query',
+      'date-fns',
+      'framer-motion',
+      'lucide-react'
+    ]
   },
   webpack: (config, { dev, isServer }) => {
     // Apply optimizations for both client and edge-server builds in production
@@ -28,10 +34,16 @@ const nextConfig = {
         minimize: true,
         moduleIds: 'deterministic',
         chunkIds: 'deterministic',
+        removeAvailableModules: true,
+        removeEmptyChunks: true,
+        mergeDuplicateChunks: true,
         splitChunks: {
           chunks: 'all',
           minSize: 4000,
-          maxSize: 8000000, // 8MB max chunk size
+          maxSize: 4000000, // 4MB max chunk size
+          minChunks: 1,
+          maxInitialRequests: 20,
+          maxAsyncRequests: 20,
           cacheGroups: {
             default: false,
             vendors: false,
@@ -39,26 +51,42 @@ const nextConfig = {
             framework: {
               name: 'framework',
               test: /[\\/]node_modules[\\/](react|react-dom|next)[\\/]/,
-              priority: 50,
+              priority: 60,
               chunks: 'all',
               enforce: true,
-              maxSize: 6000000 // 6MB limit
+              maxSize: 4000000 // 4MB limit
             },
             // Supabase related chunks
             supabase: {
               name: 'supabase',
-              test: /[\\/]node_modules[\\/](@supabase|@tanstack)[\\/]/,
+              test: /[\\/]node_modules[\\/]@supabase[\\/]/,
+              priority: 50,
+              chunks: 'all',
+              maxSize: 4000000
+            },
+            // Query related chunks
+            query: {
+              name: 'query',
+              test: /[\\/]node_modules[\\/]@tanstack[\\/]/,
               priority: 45,
               chunks: 'all',
-              maxSize: 6000000
+              maxSize: 4000000
+            },
+            // UI Components
+            ui: {
+              name: 'ui',
+              test: /[\\/]node_modules[\\/](@radix-ui|framer-motion|lucide-react)[\\/]/,
+              priority: 40,
+              chunks: 'all',
+              maxSize: 4000000
             },
             // Common chunks
             commons: {
               name: 'commons',
               minChunks: 2,
-              priority: 20,
+              priority: 30,
               reuseExistingChunk: true,
-              maxSize: 6000000
+              maxSize: 4000000
             },
             // Styles
             styles: {
@@ -66,7 +94,7 @@ const nextConfig = {
               test: /\.(css|scss|sass)$/,
               chunks: 'all',
               enforce: true,
-              maxSize: 4000000
+              maxSize: 2000000
             },
             // Third party libraries
             lib: {
@@ -77,10 +105,10 @@ const nextConfig = {
                 const packageName = match[1];
                 return `lib.${packageName.replace('@', '')}`;
               },
-              priority: 30,
+              priority: 20,
               minChunks: 1,
               reuseExistingChunk: true,
-              maxSize: 6000000
+              maxSize: 4000000
             }
           }
         }
@@ -92,7 +120,7 @@ const nextConfig = {
       // Configure webpack cache with compression
       config.cache = {
         type: 'filesystem',
-        version: '2.0.0', // Increment version to invalidate cache
+        version: '3.0.0', // Increment version to invalidate cache
         compression: 'brotli',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
         buildDependencies: {
@@ -102,19 +130,28 @@ const nextConfig = {
         compression: {
           level: 11 // Maximum compression
         },
-        name: isServer ? 'server' : 'client' // Separate caches for server and client
+        name: isServer ? 'server' : 'client', // Separate caches for server and client
+        store: 'pack',
+        memoryCacheUnaffected: true
       };
 
       // Additional optimizations
       config.performance = {
-        maxAssetSize: 8000000,
-        maxEntrypointSize: 8000000,
+        maxAssetSize: 4000000,
+        maxEntrypointSize: 4000000,
         hints: 'warning'
       };
 
       // Exclude certain dependencies from the server build
       if (isServer) {
-        config.externals = [...(config.externals || []), 'bufferutil', 'utf-8-validate'];
+        config.externals = [
+          ...(config.externals || []),
+          'bufferutil',
+          'utf-8-validate',
+          '@supabase/supabase-js',
+          '@tanstack/react-query',
+          'framer-motion'
+        ];
       }
     }
 
