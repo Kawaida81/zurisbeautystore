@@ -17,7 +17,8 @@ const nextConfig = {
   swcMinify: true,
   reactStrictMode: true,
   experimental: {
-    serverActions: true
+    serverActions: true,
+    optimizePackageImports: ['@supabase/supabase-js', '@tanstack/react-query']
   },
   webpack: (config, { dev, isServer }) => {
     // Apply optimizations for both client and edge-server builds in production
@@ -30,7 +31,7 @@ const nextConfig = {
         splitChunks: {
           chunks: 'all',
           minSize: 4000,
-          maxSize: 12000000, // 12MB max chunk size
+          maxSize: 8000000, // 8MB max chunk size
           cacheGroups: {
             default: false,
             vendors: false,
@@ -41,15 +42,15 @@ const nextConfig = {
               priority: 50,
               chunks: 'all',
               enforce: true,
-              maxSize: 8000000 // 8MB limit
+              maxSize: 6000000 // 6MB limit
             },
             // Supabase related chunks
             supabase: {
               name: 'supabase',
-              test: /[\\/]node_modules[\\/]@supabase[\\/]/,
+              test: /[\\/]node_modules[\\/](@supabase|@tanstack)[\\/]/,
               priority: 45,
               chunks: 'all',
-              maxSize: 8000000
+              maxSize: 6000000
             },
             // Common chunks
             commons: {
@@ -57,7 +58,7 @@ const nextConfig = {
               minChunks: 2,
               priority: 20,
               reuseExistingChunk: true,
-              maxSize: 8000000
+              maxSize: 6000000
             },
             // Styles
             styles: {
@@ -65,7 +66,7 @@ const nextConfig = {
               test: /\.(css|scss|sass)$/,
               chunks: 'all',
               enforce: true,
-              maxSize: 6000000
+              maxSize: 4000000
             },
             // Third party libraries
             lib: {
@@ -79,7 +80,7 @@ const nextConfig = {
               priority: 30,
               minChunks: 1,
               reuseExistingChunk: true,
-              maxSize: 8000000
+              maxSize: 6000000
             }
           }
         }
@@ -106,10 +107,15 @@ const nextConfig = {
 
       // Additional optimizations
       config.performance = {
-        maxAssetSize: 12000000,
-        maxEntrypointSize: 12000000,
+        maxAssetSize: 8000000,
+        maxEntrypointSize: 8000000,
         hints: 'warning'
       };
+
+      // Exclude certain dependencies from the server build
+      if (isServer) {
+        config.externals = [...(config.externals || []), 'bufferutil', 'utf-8-validate'];
+      }
     }
 
     return config;
