@@ -1,32 +1,30 @@
-'use client';
-
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { InfoIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import Navbar from "@/components/home/Navbar";
 import Footer from "@/components/home/Footer";
 
-export default function ProtectedPage() {
-  const [user, setUser] = useState<any>(null);
-  const router = useRouter();
-  const supabase = createClientComponentClient();
+export default async function ProtectedPage() {
+  const cookieStore = cookies()
 
-  useEffect(() => {
-    async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/sign-in");
-      } else {
-        setUser(user);
-      }
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
     }
-    checkUser();
-  }, [router, supabase.auth]);
+  )
 
-  if (!user) {
-    return null;
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session) {
+    redirect('/sign-in')
   }
 
   return (
@@ -43,7 +41,7 @@ export default function ProtectedPage() {
           <div className="flex flex-col gap-2 items-start">
             <h2 className="font-bold text-2xl mb-4">Your user details</h2>
             <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto bg-gray-50">
-              {JSON.stringify(user, null, 2)}
+              {JSON.stringify(session, null, 2)}
             </pre>
           </div>
           <div>
@@ -54,5 +52,5 @@ export default function ProtectedPage() {
       </div>
       <Footer />
     </main>
-  );
+  )
 }

@@ -22,18 +22,28 @@ const nextConfig = {
       'recharts',
     ],
   },
-  webpack: (config, { dev }) => {
-    if (!dev) {
-      config.optimization = {
-        ...config.optimization,
-        minimize: true,
-        splitChunks: {
-          chunks: 'all',
-          minSize: 5000,
-          maxSize: 15000,
-        },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
       };
     }
+
+    // Disable webpack cache
+    config.cache = false;
+
+    // Add polyfills for server-side
+    if (isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'process': 'process/browser',
+      };
+    }
+
     return config;
   },
 };

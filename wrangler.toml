@@ -10,8 +10,8 @@ SUPABASE_ANON_KEY = ""
 
 # Build configuration
 [build]
-command = "npm run build"
-output_directory = ".next"
+command = "npm run pages:build"
+pages_build_output_dir = ".vercel/output/static"
 
 # Pages configuration
 [pages]
@@ -33,7 +33,7 @@ exclude = [
 ]
 
 [site]
-bucket = ".next"
+bucket = ".vercel/output/static"
 
 [build.upload]
 format = "service-worker"

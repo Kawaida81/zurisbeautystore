@@ -1,28 +1,42 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 export async function resetPasswordAction(formData: FormData) {
   const password = formData.get('password') as string
-  const confirmPassword = formData.get('confirmPassword') as string
+  const cookieStore = cookies()
 
-  if (!password || !confirmPassword) {
-    return { error: 'Please fill in all fields' }
-  }
-
-  if (password !== confirmPassword) {
-    return { error: 'Passwords do not match' }
-  }
-
-  try {
-    const supabase = createClientComponentClient()
-    const { error } = await supabase.auth.updateUser({ password })
-
-    if (error) {
-      return { error: error.message }
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.delete({
+            name,
+            ...options,
+          })
+        },
+      },
     }
+  )
 
-    window.location.href = '/sign-in?message=Password updated successfully'
-    return { success: true }
-  } catch (error: any) {
-    return { error: error.message || 'An error occurred while resetting your password' }
+  const { error } = await supabase.auth.updateUser({
+    password,
+  })
+
+  if (error) {
+    return { error: error.message }
   }
+
+  return { success: true }
 } 
