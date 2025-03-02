@@ -18,12 +18,12 @@
 /out/
 
 # webpack cache
-.next/cache/
+.next/cache/**/*
 **/*.pack
 **/*.pack.*
-.next/cache/webpack/
-.next/cache/webpack/client-*
-.next/cache/webpack/server-*
+.next/cache/webpack/**/*
+.next/cache/webpack/client-*/**/*
+.next/cache/webpack/server-*/**/*
 
 # production
 /build

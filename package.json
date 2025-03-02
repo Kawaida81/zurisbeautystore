@@ -8,7 +8,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "pages:build": "next build && cross-env NEXT_TELEMETRY_DISABLED=1 npx @cloudflare/next-on-pages",
+    "pages:build": "npx @cloudflare/next-on-pages",
     "pages:dev": "npx wrangler pages dev .next --compatibility-date=2024-02-20",
     "pages:deploy": "npx wrangler pages deploy .next"
   },

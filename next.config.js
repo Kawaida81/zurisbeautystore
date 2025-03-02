@@ -20,6 +20,18 @@ const nextConfig = {
       'recharts',
     ],
   },
+  webpack: (config, { dev, isServer }) => {
+    if (!isServer && !dev) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+      };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig; 
