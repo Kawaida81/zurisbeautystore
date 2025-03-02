@@ -8,7 +8,7 @@ const products = [
   {
     id: 1,
     name: 'Nail Polish',
-    image: '/images/Nail Polish.jpg',
+    image: '/images/Nail-Polish.jpg',
     rating: 5.0,
     price: 212,
     originalPrice: 232,
@@ -17,21 +17,21 @@ const products = [
   {
     id: 2,
     name: 'Makeup Kit',
-    image: '/images/Makeup Kit.jpg',
+    image: '/images/Makeup-Kit.jpg',
     rating: 4.0,
     price: 145,
   },
   {
     id: 3,
     name: 'Eye Pencil',
-    image: '/images/Eye Pencil.jpg',
+    image: '/images/Eye-Pencil.jpg',
     rating: 3.0,
     price: 80,
   },
   {
     id: 4,
     name: 'Lip gloss',
-    image: '/images/Lip Gloss.jpg',
+    image: '/images/Lip-gloss.jpg',
     rating: 4.5,
     price: 210,
   },

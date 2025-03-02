@@ -55,7 +55,7 @@ export default function Hero() {
             <div className="aspect-[4/3] relative rounded-xl overflow-hidden shadow-xl">
               <div className="absolute inset-0 bg-[#FF6B6B]/10 mix-blend-multiply z-10" />
               <Image
-                src="/images/hero-image.png"
+                src="/images/hero-image.jpg"
                 alt="Beauty Products"
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
