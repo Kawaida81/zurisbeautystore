@@ -24,6 +24,8 @@
 .next/cache/webpack/**/*
 .next/cache/webpack/client-*/**/*
 .next/cache/webpack/server-*/**/*
+.next/cache/webpack/*.pack
+.next/cache/webpack/**/*.pack.*
 
 # production
 /build
