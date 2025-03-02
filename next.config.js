@@ -1,120 +1,152 @@
+const webpack = require('webpack');
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
-
-const setupDevPlatform = process.env.NODE_ENV === 'development' 
-  ? require('@cloudflare/next-on-pages/next-dev').setupDevPlatform
-  : () => {};
-
-if (process.env.NODE_ENV === 'development') {
-  setupDevPlatform();
-}
-
 const nextConfig = {
   images: {
-    unoptimized: true,
-    domains: ['pxsrrupipvqyccpriceg.supabase.co']
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
   output: 'standalone',
   swcMinify: true,
-  reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_RUNTIME: 'browser',
+  },
   experimental: {
     serverActions: true,
     optimizePackageImports: [
-      '@supabase/supabase-js',
-      '@tanstack/react-query',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-label',
       'date-fns',
+      'lucide-react',
       'framer-motion',
-      'lucide-react'
-    ]
+      '@hookform/resolvers',
+      '@tanstack/react-query'
+    ],
   },
   webpack: (config, { dev, isServer }) => {
-    // Apply optimizations for both client and edge-server builds in production
-    if (!dev) {
-      // Configure webpack cache
-      config.cache = {
-        type: 'filesystem',
-        buildDependencies: {
-          config: [__filename]
-        },
-        cacheDirectory: require('path').resolve(__dirname, '.next/cache/webpack'),
-        name: isServer ? 'server' : 'client',
-        version: '4.0.0'
-      };
+    // Polyfill fallbacks
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      crypto: require.resolve('crypto-browserify'),
+    };
 
-      // Optimization settings
+    // Only minimize client bundles in production
+    if (!isServer && !dev) {
       config.optimization = {
         ...config.optimization,
-        minimize: true,
         moduleIds: 'deterministic',
-        chunkIds: 'deterministic',
-        removeAvailableModules: true,
-        removeEmptyChunks: true,
-        mergeDuplicateChunks: true,
-        splitChunks: isServer ? false : {
+        minimize: true,
+        minimizer: [
+          ...config.optimization.minimizer || [],
+        ],
+        splitChunks: {
           chunks: 'all',
           minSize: 20000,
-          maxSize: 2000000,
-          minChunks: 1,
-          maxInitialRequests: 20,
-          maxAsyncRequests: 20,
+          maxSize: 100000,
           cacheGroups: {
             default: false,
             vendors: false,
             framework: {
-              name: 'framework',
               chunks: 'all',
-              test: /[\\/]node_modules[\\/](react|react-dom|next)[\\/]/,
+              name: 'framework',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-subscription)[\\/]/,
               priority: 40,
-              enforce: true
+              enforce: true,
+              reuseExistingChunk: true,
             },
             commons: {
               name: 'commons',
+              chunks: 'all',
               minChunks: 2,
               priority: 20,
-              reuseExistingChunk: true
-            }
+              reuseExistingChunk: true,
+              enforce: true,
+            },
+            lib: {
+              test(module) {
+                return (
+                  module.size() > 50000 &&
+                  /node_modules[/\\]/.test(module.identifier())
+                );
+              },
+              name(module) {
+                const match = module.identifier().match(/node_modules[/\\](.*?)([/\\]|$)/);
+                const name = match ? match[1].replace(/[@.]/g, '_') : 'lib';
+                return `lib-${name.substring(0, 30)}`;
+              },
+              priority: 30,
+              minChunks: 1,
+              reuseExistingChunk: true,
+            },
+            styles: {
+              name: 'styles',
+              test: /\.(css|scss|sass)$/,
+              chunks: 'all',
+              enforce: true,
+              priority: 50,
+            },
+            images: {
+              name: 'images',
+              test: /\.(png|jpg|jpeg|gif|svg|ico|webp)$/,
+              chunks: 'all',
+              priority: 45,
+            },
+          },
+        },
+      };
+
+      // Enable tree shaking
+      config.optimization.usedExports = true;
+    }
+
+    // Performance hints
+    config.performance = {
+      ...config.performance,
+      maxEntrypointSize: 500000,
+      maxAssetSize: 500000,
+      hints: !dev ? 'warning' : false,
+    };
+
+    // Server-specific settings
+    if (isServer) {
+      config.output = {
+        ...config.output,
+        webassemblyModuleFilename: 'static/wasm/[modulehash].wasm',
+      };
+
+      // Handle server-side packages
+      config.externals = [
+        ...(Array.isArray(config.externals) ? config.externals : []),
+        ({ request }, callback) => {
+          if (['@supabase/supabase-js', '@tanstack/react-query', 'next-auth', 'jose', 'framer-motion', 'date-fns'].includes(request)) {
+            return callback(null, `commonjs ${request}`);
           }
+          callback();
         }
-      };
-
-      // Disable source maps in production
-      config.devtool = false;
-
-      // Performance hints
-      config.performance = {
-        maxAssetSize: 2000000,
-        maxEntrypointSize: 2000000,
-        hints: 'warning'
-      };
-
-      // Server-specific configurations
-      if (isServer) {
-        config.output = {
-          ...config.output,
-          globalObject: 'this'
-        };
-
-        // External packages for server build
-        config.externals = [
-          ...(config.externals || []),
-          'bufferutil',
-          'utf-8-validate',
-          {
-            'react-dom/server': 'commonjs react-dom/server',
-            '@supabase/supabase-js': 'commonjs @supabase/supabase-js',
-            '@tanstack/react-query': 'commonjs @tanstack/react-query',
-            'framer-motion': 'commonjs framer-motion'
-          }
-        ];
-      }
+      ];
     }
 
     return config;
   },
-  // Clean webpack cache when building for production
+  // Disable powered by header
+  poweredByHeader: false,
+  // Adjust onDemandEntries
   onDemandEntries: {
-    maxInactiveAge: 60 * 60 * 1000, // 1 hour
-    pagesBufferLength: 2
-  }
+    maxInactiveAge: 60 * 60 * 1000,
+    pagesBufferLength: 5,
+  },
+  reactStrictMode: true,
+  compress: true,
+  productionBrowserSourceMaps: false,
 }
 
 module.exports = nextConfig 

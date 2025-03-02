@@ -6,31 +6,28 @@ compatibility_flags = ["nodejs_compat"]
 NODE_VERSION = "18.17.1"
 NODE_ENV = "production"
 
-
+# Build configuration
 [build]
 command = "npm run pages:build"
-output_directory = ".next/standalone"
+output_directory = ".vercel/output/static"
 
-[deployment]
-routes = [
-  { pattern = "/*", zone_name = "zurisbeautystore" }
-]
-
-# Add Pages configuration
-pages_build_output_dir = ".next/standalone"
-
-[site]
-bucket = ".next/standalone"
+# Pages configuration
+[pages]
+build_output_directory = ".vercel/output/static"
 include = [
-  ".next/static/*",
-  "public/*"
+  "public/*",
+  ".next/static/*"
 ]
 exclude = [
   "node_modules/**/*",
   ".git/**/*",
   ".next/cache/**/*",
-  "**/*.pack"
+  "**/*.pack",
+  "**/*.pack.*"
 ]
+
+[site]
+bucket = ".vercel/output/static"
 
 [vars]
 NEXT_PUBLIC_SUPABASE_URL = "https://pxsrrupipvqyccpriceg.supabase.co"
