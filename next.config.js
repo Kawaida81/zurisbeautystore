@@ -25,28 +25,49 @@ const nextConfig = {
       config.optimization = {
         ...config.optimization,
         minimize: true,
+        moduleIds: 'deterministic',
+        chunkIds: 'deterministic',
         splitChunks: {
           chunks: 'all',
-          minSize: 5000,
-          maxSize: 20000000, // 20MB max chunk size
+          minSize: 4000,
+          maxSize: 12000000, // 12MB max chunk size
           cacheGroups: {
             default: false,
             vendors: false,
+            // Core framework libraries
             framework: {
               name: 'framework',
-              test: /[\\/]node_modules[\\/](react|react-dom|next|@supabase)[\\/]/,
-              priority: 40,
+              test: /[\\/]node_modules[\\/](react|react-dom|next)[\\/]/,
+              priority: 50,
               chunks: 'all',
               enforce: true,
-              maxSize: 15000000 // 15MB limit for framework chunks
+              maxSize: 8000000 // 8MB limit
             },
+            // Supabase related chunks
+            supabase: {
+              name: 'supabase',
+              test: /[\\/]node_modules[\\/]@supabase[\\/]/,
+              priority: 45,
+              chunks: 'all',
+              maxSize: 8000000
+            },
+            // Common chunks
             commons: {
               name: 'commons',
               minChunks: 2,
               priority: 20,
               reuseExistingChunk: true,
-              maxSize: 15000000
+              maxSize: 8000000
             },
+            // Styles
+            styles: {
+              name: 'styles',
+              test: /\.(css|scss|sass)$/,
+              chunks: 'all',
+              enforce: true,
+              maxSize: 6000000
+            },
+            // Third party libraries
             lib: {
               test: /[\\/]node_modules[\\/]/,
               name(module) {
@@ -58,7 +79,7 @@ const nextConfig = {
               priority: 30,
               minChunks: 1,
               reuseExistingChunk: true,
-              maxSize: 15000000 // 15MB limit for lib chunks
+              maxSize: 8000000
             }
           }
         }
@@ -70,7 +91,7 @@ const nextConfig = {
       // Configure webpack cache with compression
       config.cache = {
         type: 'filesystem',
-        version: '1.0.0',
+        version: '2.0.0', // Increment version to invalidate cache
         compression: 'brotli',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
         buildDependencies: {
@@ -79,7 +100,15 @@ const nextConfig = {
         cacheDirectory: '.next/cache/webpack',
         compression: {
           level: 11 // Maximum compression
-        }
+        },
+        name: isServer ? 'server' : 'client' // Separate caches for server and client
+      };
+
+      // Additional optimizations
+      config.performance = {
+        maxAssetSize: 12000000,
+        maxEntrypointSize: 12000000,
+        hints: 'warning'
       };
     }
 
