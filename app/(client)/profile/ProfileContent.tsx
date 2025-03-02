@@ -250,6 +250,215 @@ export default function ProfileContent() {
               <p className="text-gray-500">Member since {new Date(profile.created_at).toLocaleDateString()}</p>
             </div>
           </div>
+          <div className="flex gap-2">
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditing(false)
+                    setEditedProfile(profile.client_profile)
+                  }}
+                  disabled={isSaving}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setIsEditing(true)}>
+                <Edit2 className="w-4 h-4 mr-2" />
+                Edit Profile
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Profile Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Personal Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Personal Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Full Name</Label>
+                <Input value={profile.full_name} disabled />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={profile.email} disabled />
+                  {editedProfile.preferred_contact === 'email' && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      Preferred
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={profile.phone || 'Not provided'} disabled />
+                  {editedProfile.preferred_contact === 'phone' && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      Preferred
+                    </span>
+                  )}
+                </div>
+              </div>
+              {isEditing && (
+                <div>
+                  <Label>Preferred Contact Method</Label>
+                  <Select
+                    value={editedProfile.preferred_contact}
+                    onValueChange={(value) => handleInputChange('preferred_contact', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select preferred contact" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Phone</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Account Statistics */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="w-5 h-5" />
+                Account Statistics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Last Visit</span>
+                  </div>
+                  <p className="font-semibold">
+                    {profile.client_profile.last_visit_date
+                      ? new Date(profile.client_profile.last_visit_date).toLocaleDateString()
+                      : 'No visits yet'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Total Visits</span>
+                  </div>
+                  <p className="font-semibold">{profile.client_profile.total_visits}</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Total Spent</span>
+                  </div>
+                  <p className="font-semibold">
+                    ${profile.client_profile.total_spent.toFixed(2)}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Loyalty Points</span>
+                  </div>
+                  <p className="font-semibold">{profile.client_profile.loyalty_points}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Appointments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Upcoming Appointments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {profile.upcoming_appointments.length > 0 ? (
+                <div className="space-y-4">
+                  {profile.upcoming_appointments.map((appointment: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-semibold">{appointment.service_name}</p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(appointment.appointment_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No upcoming appointments</p>
+                  <Button variant="outline" className="mt-4">
+                    Book Now
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Services */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="w-5 h-5" />
+                Recent Services
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {profile.recent_services.length > 0 ? (
+                <div className="space-y-4">
+                  {profile.recent_services.map((service: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-semibold">{service.service_name}</p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(service.service_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <p className="font-semibold">${service.price.toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Star className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No recent services</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </motion.div>
     </div>
