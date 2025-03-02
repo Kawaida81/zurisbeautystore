@@ -21,6 +21,7 @@ const nextConfig = {
       'date-fns',
       'recharts',
     ],
+    missingSuspenseWithCSRBailout: false,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

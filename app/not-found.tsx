@@ -1,29 +1,13 @@
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft } from 'lucide-react'
+export const runtime = 'edge'
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="text-center space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-bold text-[#6C63FF]">404</h1>
-          <h2 className="text-2xl font-semibold text-gray-900">Page Not Found</h2>
-          <p className="text-gray-600 max-w-sm mx-auto">
-            Sorry, we couldn't find the page you're looking for. Please check the URL or return to the homepage.
-          </p>
-        </div>
-        
-        <Link href="/" className="inline-block">
-          <Button 
-            variant="default" 
-            className="bg-[#6C63FF] hover:bg-[#6C63FF]/90"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
-          </Button>
-        </Link>
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center">
+      <h1 className="text-4xl font-bold">404 - Page Not Found</h1>
+      <p className="mt-4 text-gray-600">The page you're looking for doesn't exist.</p>
+      <a href="/" className="mt-8 text-blue-600 hover:underline">
+        Return Home
+      </a>
     </div>
   )
 } 
