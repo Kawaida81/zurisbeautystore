@@ -1,7 +1,7 @@
 import TopBanner from '@/components/home/TopBanner'
 import Navbar from '@/components/home/Navbar'
 import Footer from '@/components/home/Footer'
-import OurProducts from '@/components/home/OurProducts'
+import AllProducts from '@/components/products/AllProducts'
 
 export default function ProductsPage() {
   return (
@@ -9,7 +9,7 @@ export default function ProductsPage() {
       <TopBanner />
       <Navbar />
       <div className="py-8">
-        <OurProducts />
+        <AllProducts />
       </div>
       <Footer />
     </main>

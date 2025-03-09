@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import { Toaster } from 'sonner'
 import './globals.css'
-import { SupabaseProvider } from '@/components/providers/supabase-provider'
+import { Providers } from '@/components/providers'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,10 +22,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
       <body className={inter.className}>
-        <SupabaseProvider>
-          <Toaster position="top-center" />
-          {children}
-        </SupabaseProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

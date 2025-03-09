@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useCart } from '../providers/cart-provider'
 
 const products = [
   {
@@ -40,6 +41,24 @@ const products = [
 ]
 
 export default function TopSelling() {
+  const { addToCart, removeFromCart, isInCart } = useCart()
+
+  const handleCartAction = (product: any) => {
+    const cartItem = {
+      id: product.id,
+      section: 'top-selling' as const,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+    }
+    
+    if (isInCart(product.id, 'top-selling')) {
+      removeFromCart(product.id, 'top-selling')
+    } else {
+      addToCart(cartItem)
+    }
+  }
+
   return (
     <section id="top-selling" className="py-16 scroll-mt-20">
       <div className="container mx-auto px-4">
@@ -66,7 +85,7 @@ export default function TopSelling() {
                 </div>
                 <span className="ml-2 text-sm text-gray-600">{product.rating}/5</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mb-4">
                 <span className="text-lg font-bold">Kes {product.price}</span>
                 {product.originalPrice && (
                   <>
@@ -77,12 +96,40 @@ export default function TopSelling() {
                   </>
                 )}
               </div>
+              <Button
+                onClick={() => handleCartAction(product)}
+                variant={isInCart(product.id, 'top-selling') ? "destructive" : "default"}
+                className="w-full"
+              >
+                {isInCart(product.id, 'top-selling') ? 'Remove from Cart' : 'Add to Cart'}
+              </Button>
             </div>
           ))}
         </div>
         <div className="mt-12 text-center">
-          <Button asChild variant="outline" size="lg">
-            <Link href="/products">View All</Link>
+          <Button 
+            asChild 
+            size="lg"
+            className="bg-white hover:bg-[#FF6B6B] text-[#FF6B6B] hover:text-white border-2 border-[#FF6B6B] px-8 py-6 text-lg rounded-full transition-all duration-300 hover:scale-105 shadow-sm hover:shadow-md group"
+          >
+            <Link href="/products" className="flex items-center gap-2">
+              View All Products
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5 h-5 transform transition-transform group-hover:translate-x-1"
+              >
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </Link>
           </Button>
         </div>
       </div>
