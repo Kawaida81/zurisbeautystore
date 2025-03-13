@@ -20,8 +20,20 @@ const nextConfig = {
       '@tremor/react',
       'date-fns',
       'recharts',
-    ],
-    missingSuspenseWithCSRBailout: false,
+    ]
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, stale-while-revalidate=60',
+          },
+        ],
+      },
+    ];
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

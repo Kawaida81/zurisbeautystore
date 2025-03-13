@@ -52,39 +52,34 @@ export default function SignInPage() {
       setIsLoading(true)
       const supabase = createClient()
 
-      // Sign in with Supabase Auth
+      // Step 1: Sign in with email and password
       const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       })
 
-      if (signInError) {
-        throw new Error(signInError.message)
+      if (signInError || !authData.user) {
+        throw new Error(signInError?.message || 'Authentication failed')
       }
 
-      if (!authData.user) {
-        throw new Error('No user data returned')
-      }
+      // Step 2: Get user role and profile using the RPC function
+      const { data: userProfile, error: profileError } = await supabase.rpc(
+        'get_user_role_and_profile',
+        { user_id: authData.user.id }
+      )
 
-      // Get user profile with role
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('role, is_active')
-        .eq('id', authData.user.id)
-        .single()
-
-      if (profileError || !profile) {
+      if (profileError || !userProfile) {
         throw new Error('Failed to fetch user profile')
       }
 
-      if (!profile.is_active) {
+      if (!userProfile.profile.is_active) {
         throw new Error('Your account is currently inactive. Please contact support.')
       }
 
-      // Determine redirect path
+      // Get redirect path from user role
       let redirectPath = returnUrl || ''
       if (!redirectPath) {
-        switch (profile.role) {
+        switch (userProfile.role) {
           case 'worker':
             redirectPath = '/worker/dashboard'
             break
@@ -98,13 +93,17 @@ export default function SignInPage() {
 
       toast.success('Successfully signed in!')
       
-      // Force a hard navigation to ensure middleware runs
-      window.location.href = redirectPath
+      // Use Next.js router for client-side navigation when possible
+      if (returnUrl) {
+        window.location.href = redirectPath // Force hard navigation for return URLs
+      } else {
+        router.push(redirectPath)
+      }
       
     } catch (error: any) {
       console.error('Sign-in error:', error)
       toast.error(error.message || 'Failed to sign in')
-      // Sign out on error
+      // Clean up on error
       const supabase = createClient()
       await supabase.auth.signOut()
     } finally {

@@ -28,6 +28,17 @@ A modern, full-stack web application for managing beauty salon operations, built
 - 📱 Marketing Tools
 - 💰 Financial Reporting
 
+## Edge Functions
+
+The application uses Supabase Edge Functions for improved performance:
+
+- **Fast Auth**: Optimized authentication process
+- **Session Validator**: Quick session validation
+- **Profile Cache**: Cached user profiles
+- **Rate Limiter**: Protection against brute force attacks
+
+For more details, see the [Edge Functions documentation](supabase/functions/README.md).
+
 ## Tech Stack
 
 - **Frontend**: Next.js 13 (App Router)
@@ -97,20 +108,15 @@ The application uses Supabase with the following main tables:
 - `sales` - Sales records
 - `inventory` - Product inventory
 
+## Performance Optimizations
+
+- Edge Functions for reduced latency
+- Caching headers for static assets
+- Profile data caching
+- Rate limiting for security
+- Optimized database queries
+
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-Kawaida81 - [@kawaida81](https://github.com/Kawaida81)
-
-Project Link: [https://github.com/Kawaida81/zurisbeautystore](https://github.com/Kawaida81/zurisbeautystore)
+2. Create your feature branch (`
