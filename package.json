@@ -9,7 +9,7 @@
     "clean": "rimraf .next/cache",
     "build": "next build",
     "start": "next start",
-    "pages:build": "next build && NODE_NO_WARNINGS=1 npx @cloudflare/next-on-pages --experimental-minify",
+    "pages:build": "next build && cross-env NODE_NO_WARNINGS=1 npx @cloudflare/next-on-pages --experimental-minify",
     "pages:dev": "npx wrangler pages dev .next --compatibility-date=2024-02-20",
     "pages:deploy": "npx wrangler pages deploy .next",
     "preview:worker": "npm run pages:build && wrangler pages dev .vercel/output/static --compatibility-date=2024-02-20 --no-bundle"
