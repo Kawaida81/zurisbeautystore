@@ -51,6 +51,7 @@
     "react-day-picker": "^9.5.1",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.54.2",
+    "recharts": "^2.15.1",
     "shadcn-ui": "^0.9.4",
     "sonner": "^1.7.4",
     "utf-8-validate": "^6.0.3"

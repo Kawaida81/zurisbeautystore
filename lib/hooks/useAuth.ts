@@ -60,7 +60,7 @@ export function useAuth() {
     }
   }
 
-  const signUp = async ({ email, password, fullName, role = 'client', phone }: SignUpInput) => {
+  const signUp = async ({ email, password, fullName, phone }: SignUpInput) => {
     try {
       setLoading(true)
       setError(null)
@@ -84,7 +84,7 @@ export function useAuth() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: fullName,
-            role,
+            role: 'client',
             is_active: true
           }
         },
@@ -101,7 +101,7 @@ export function useAuth() {
         user_id: authData.user.id,
         user_email: email,
         user_full_name: fullName,
-        user_role: role
+        user_role: 'client'
       }) as { 
         data: { success: boolean; message?: string } | null; 
         error: any 

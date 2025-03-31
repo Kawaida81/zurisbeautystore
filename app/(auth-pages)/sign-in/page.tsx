@@ -80,6 +80,9 @@ export default function SignInPage() {
       let redirectPath = returnUrl || ''
       if (!redirectPath) {
         switch (userProfile.role) {
+          case 'admin':
+            redirectPath = '/admin'
+            break
           case 'worker':
             redirectPath = '/worker/dashboard'
             break

@@ -42,6 +42,9 @@ export default function AuthLayout({
 
         // Redirect based on role
         switch (profile.role) {
+          case 'admin':
+            router.push('/admin')
+            break
           case 'worker':
             router.push('/worker/dashboard')
             break

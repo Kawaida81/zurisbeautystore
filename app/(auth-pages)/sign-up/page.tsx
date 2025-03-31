@@ -21,13 +21,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 // Helper function to wait for a specified time
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -76,7 +69,6 @@ export default function SignUpPage() {
       confirmPassword: "",
       fullName: "",
       phone: "",
-      role: "client",
     },
   });
 
@@ -85,7 +77,19 @@ export default function SignUpPage() {
       setIsLoading(true);
       const supabase = createClient();
 
-      // Sign up the user and let the database trigger handle profile creation
+      // First check if the email already exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', data.email)
+        .single();
+
+      if (existingUser) {
+        toast.error('An account with this email already exists');
+        return;
+      }
+
+      // Sign up the user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -93,14 +97,18 @@ export default function SignUpPage() {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: data.fullName,
-            role: data.role,
+            role: "client",
             phone: data.phone || null
           }
         }
       });
 
       if (signUpError) {
-        console.error('Sign up error:', signUpError);
+        // Handle specific error cases
+        if (signUpError.message.includes('already registered')) {
+          toast.error('An account with this email already exists');
+          return;
+        }
         throw new Error(signUpError.message || 'Failed to create account');
       }
 
@@ -203,31 +211,6 @@ export default function SignUpPage() {
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="h-12">
-                          <SelectValue placeholder="Select your account type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="client">Client</SelectItem>
-                        <SelectItem value="worker">Worker</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
