@@ -4,13 +4,13 @@ compatibility_flags = ["nodejs_compat"]
 
 # Production environment
 [env.production]
-NODE_VERSION = "18.17.1"
+NODE_VERSION = "20"
 NODE_ENV = "production"
 compatibility_flags = ["nodejs_compat"]
 
 # Preview environment
 [env.preview]
-NODE_VERSION = "18.17.1"
+NODE_VERSION = "20"
 NODE_ENV = "development"
 compatibility_flags = ["nodejs_compat"]
 

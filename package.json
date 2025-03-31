@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/SchemaStore/schemastore/master/src/schemas/json/package.json",
   "private": true,
   "engines": {
-    "node": "18.17.1"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "next dev",
