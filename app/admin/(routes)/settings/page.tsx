@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/admin/components
 import { Button } from '@/app/admin/components/ui/button'
 import { Input } from '@/app/admin/components/ui/input'
 import { Label } from '@/app/admin/components/ui/label'
+import { LoadingSpinner } from '@/app/admin/components/loading-spinner'
+import { toast } from 'react-hot-toast'
 
 interface Settings {
   businessName: string
@@ -41,6 +43,7 @@ export default function SettingsPage() {
         }
       } catch (error) {
         console.error('Error fetching settings:', error)
+        toast.error('Failed to load settings. Please try again.')
       } finally {
         setIsLoading(false)
       }
@@ -58,30 +61,34 @@ export default function SettingsPage() {
         .upsert(settings)
 
       if (error) throw error
-      alert('Settings saved successfully!')
+      toast.success('Settings saved successfully!')
     } catch (error) {
       console.error('Error saving settings:', error)
-      alert('Failed to save settings. Please try again.')
+      toast.error('Failed to save settings. Please try again.')
     } finally {
       setIsSaving(false)
     }
   }
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <LoadingSpinner size={40} />
+      </div>
+    )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h2>
       </div>
       <div className="grid gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Business Information</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 sm:space-y-6">
             <div className="grid gap-2">
               <Label htmlFor="businessName">Business Name</Label>
               <Input
@@ -129,7 +136,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Loyalty Program</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 sm:space-y-6">
             <div className="grid gap-2">
               <Label htmlFor="loyaltyPointsRate">
                 Points earned per KSh 100 spent
@@ -152,8 +159,16 @@ export default function SettingsPage() {
           <Button
             onClick={handleSave}
             disabled={isSaving}
+            className="w-full sm:w-auto"
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? (
+              <>
+                <LoadingSpinner size={16} />
+                <span className="ml-2">Saving...</span>
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </Button>
         </div>
       </div>

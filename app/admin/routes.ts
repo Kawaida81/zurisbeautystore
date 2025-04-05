@@ -1,11 +1,14 @@
 import { 
   Home, 
-  ShoppingBag, 
   Users, 
   Package, 
   Settings, 
-  BarChart, 
-  MessageSquare
+  MessageSquare,
+  Calendar,
+  Briefcase,
+  Box,
+  Tag,
+  DollarSign
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -17,10 +20,13 @@ export interface AdminRoute {
 
 export const adminRoutes: AdminRoute[] = [
   { name: "Dashboard", icon: Home, href: "/admin" },
-  { name: "Orders", icon: ShoppingBag, href: "/admin/orders" },
   { name: "Products", icon: Package, href: "/admin/products" },
+  { name: "Inventory", icon: Box, href: "/admin/inventory" },
+  { name: "Services", icon: Tag, href: "/admin/services" },
+  { name: "Appointments", icon: Calendar, href: "/admin/appointments" },
+  { name: "Workers", icon: Briefcase, href: "/admin/workers" },
   { name: "Customers", icon: Users, href: "/admin/customers" },
-  { name: "Analytics", icon: BarChart, href: "/admin/analytics" },
-  { name: "Messages", icon: MessageSquare, href: "/admin/messages" },
+  { name: "Client Engagement", icon: MessageSquare, href: "/admin/client-engagement" },
+  { name: "Profit", icon: DollarSign, href: "/admin/profit" },
   { name: "Settings", icon: Settings, href: "/admin/settings" },
-]; 
+];

@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { DashboardHeader, StatCard, TopProducts, RecentOrders } from "./components";
+import { DashboardHeader, StatCard } from "./components";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard | Zuri's Beauty Store",
@@ -33,10 +33,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <TopProducts />
-        <RecentOrders />
-      </div>
+
     </div>
   );
 } 

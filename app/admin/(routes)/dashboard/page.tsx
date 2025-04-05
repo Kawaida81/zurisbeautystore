@@ -2,26 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/admin/components/ui/card'
-import { Overview, RecentSales } from '@/app/admin/components'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { LoadingSpinner } from '@/app/admin/components/loading-spinner'
+import { toast } from 'react-hot-toast'
 
 interface DashboardMetrics {
-  totalSales: number
   totalCustomers: number
   totalAppointments: number
-  totalProducts: number
-  recentSales: any[]
-  salesData: any[]
+  totalServices: number
+  totalWorkers: number
 }
 
 export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
-    totalSales: 0,
     totalCustomers: 0,
     totalAppointments: 0,
-    totalProducts: 0,
-    recentSales: [],
-    salesData: []
+    totalServices: 0,
+    totalWorkers: 0
   })
   const [isLoading, setIsLoading] = useState(true)
 
@@ -30,51 +27,36 @@ export default function AdminDashboard() {
       try {
         const supabase = createClient()
         
-        // Fetch total sales
-        const { data: salesData } = await supabase
-          .from('sales')
-          .select('amount')
-        
         // Fetch total customers
         const { count: customersCount } = await supabase
-          .from('users')
+          .from('customers')
           .select('*', { count: 'exact', head: true })
-          .eq('role', 'client')
         
         // Fetch total appointments
         const { count: appointmentsCount } = await supabase
           .from('appointments')
           .select('*', { count: 'exact', head: true })
         
-        // Fetch total products
-        const { count: productsCount } = await supabase
-          .from('products')
+        // Fetch total services
+        const { count: servicesCount } = await supabase
+          .from('services')
           .select('*', { count: 'exact', head: true })
         
-        // Fetch recent sales
-        const { data: recentSales } = await supabase
-          .from('sales')
-          .select(`
-            *,
-            client:users(full_name),
-            worker:users(full_name)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(5)
-
-        // Calculate total sales amount
-        const totalSales = salesData?.reduce((acc, sale) => acc + sale.amount, 0) || 0
+        // Fetch total workers
+        const { count: workersCount } = await supabase
+          .from('workers')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'active')
 
         setMetrics({
-          totalSales,
           totalCustomers: customersCount || 0,
           totalAppointments: appointmentsCount || 0,
-          totalProducts: productsCount || 0,
-          recentSales: recentSales || [],
-          salesData: salesData || []
+          totalServices: servicesCount || 0,
+          totalWorkers: workersCount || 0
         })
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
+        toast.error('Failed to load dashboard data. Please try again.')
       } finally {
         setIsLoading(false)
       }
@@ -84,63 +66,50 @@ export default function AdminDashboard() {
   }, [])
 
   if (isLoading) {
-    return <div>Loading...</div>
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <LoadingSpinner size={40} />
+      </div>
+    )
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard Overview</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Metrics Cards */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">KSh {metrics.totalSales.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalCustomers}</div>
+            <div className="text-xl sm:text-2xl font-bold">{metrics.totalCustomers}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Appointments</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Appointments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalAppointments}</div>
+            <div className="text-xl sm:text-2xl font-bold">{metrics.totalAppointments}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Products</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Active Services</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalProducts}</div>
+            <div className="text-xl sm:text-2xl font-bold">{metrics.totalServices}</div>
           </CardContent>
         </Card>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <Overview data={metrics.salesData} />
-          </CardContent>
-        </Card>
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Active Workers</CardTitle>
           </CardHeader>
           <CardContent>
-            <RecentSales data={metrics.recentSales} />
+            <div className="text-xl sm:text-2xl font-bold">{metrics.totalWorkers}</div>
           </CardContent>
         </Card>
       </div>
