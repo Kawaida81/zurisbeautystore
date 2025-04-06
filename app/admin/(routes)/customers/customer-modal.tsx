@@ -1,80 +1,102 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Input } from "@/app/admin/components/ui/input";
 import { Button } from "@/app/admin/components/ui/button";
 import { Label } from "@/app/admin/components/ui/label";
 import { Modal } from "@/app/admin/components/ui/modal";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import type { Customer } from './columns';
 import { createClient } from "@/lib/supabase/client";
 import { toast } from 'react-hot-toast';
 
+const formSchema = z.object({
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
+  address: z.string().min(1, 'Address is required')
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
 interface CustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: () => void;
-  customer?: Customer | null;
+  onSuccess: () => void;
+  customer?: Customer;
 }
 
 export function CustomerModal({
   isOpen,
   onClose,
-  onSubmit,
+  onSuccess,
   customer
 }: CustomerModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<Omit<Customer, 'id' | 'created_at' | 'appointments' | 'total_spent'>>({
-    full_name: '',
-    email: '',
-    phone_number: '',
-    loyalty_points: 0
+  const [loading, setLoading] = useState(false);
+  const supabase = createClient();
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: customer || {
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      address: ''
+    }
   });
 
-  useEffect(() => {
-    if (customer) {
-      setFormData({
-        full_name: customer.full_name,
-        email: customer.email,
-        phone_number: customer.phone_number,
-        loyalty_points: customer.loyalty_points
-      });
-    }
-  }, [customer]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const onSubmit = async (data: FormValues) => {
     try {
-      const supabase = createClient();
+      setLoading(true);
+      
       if (customer?.id) {
-        const { error } = await supabase
-          .from('customers')
-          .update({
-            full_name: formData.full_name,
-            email: formData.email,
-            phone_number: formData.phone_number,
-            loyalty_points: formData.loyalty_points
-          })
-          .eq('id', customer.id);
+        const { error } = await supabase.rpc('update_customer', {
+          p_customer_id: customer.id,
+          p_first_name: data.first_name,
+          p_last_name: data.last_name,
+          p_email: data.email,
+          p_phone: data.phone,
+          p_address: data.address
+        });
+        
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('customers')
-          .insert([{
-            full_name: formData.full_name,
-            email: formData.email,
-            phone_number: formData.phone_number,
-            loyalty_points: formData.loyalty_points
-          }]);
+        const { error } = await supabase.rpc('create_customer', {
+          p_first_name: data.first_name,
+          p_last_name: data.last_name,
+          p_email: data.email,
+          p_phone: data.phone,
+          p_address: data.address
+        });
+        
         if (error) throw error;
       }
+      
       toast.success(customer ? 'Customer updated successfully' : 'Customer created successfully');
-      onSubmit();
-    } catch (error) {
+      onSuccess();
+      onClose();
+    } catch (error: any) {
       console.error('Error saving customer:', error);
-      toast.error('Failed to save customer. Please try again.');
+      if (error.message.includes('email already exists')) {
+        toast.error('A customer with this email already exists');
+      } else {
+        toast.error('Failed to save customer. Please try again.');
+      }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -83,55 +105,121 @@ export function CustomerModal({
       title={customer ? 'Edit Customer' : 'Add Customer'}
       isOpen={isOpen}
       onClose={onClose}
-      isLoading={isLoading}
+      isLoading={loading}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input
-              id="full_name"
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              placeholder="John Doe"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="first_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>First Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="John"
+                      disabled={loading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="last_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Last Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Doe"
+                      disabled={loading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           </div>
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="john@example.com"
-            />
-          </div>
-          <div>
-            <Label htmlFor="phone_number">Phone Number</Label>
-            <Input
-              id="phone_number"
-              value={formData.phone_number}
-              onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-              placeholder="+1234567890"
-            />
-          </div>
-          <div>
-            <Label htmlFor="loyalty_points">Loyalty Points</Label>
-            <Input
-              id="loyalty_points"
-              type="number"
-              value={formData.loyalty_points}
-              onChange={(e) => setFormData({ ...formData, loyalty_points: parseInt(e.target.value) })}
-            />
-          </div>
+
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    type="email"
+                    placeholder="john@example.com"
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Phone</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="+254712345678"
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="address"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Address</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Enter customer's address"
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" type="button" onClick={onClose}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={loading}
+            >
               Cancel
             </Button>
-            <Button type="submit">
-              {customer ? 'Update' : 'Create'}
+            <Button
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? 'Saving...' : customer ? 'Update' : 'Create'}
             </Button>
           </div>
         </form>
+      </Form>
     </Modal>
   );
 }

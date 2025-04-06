@@ -7,17 +7,15 @@ import { Edit, Trash } from "lucide-react";
 
 export interface Customer {
   id: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  phone_number: string;
+  phone: string;
+  address: string;
   created_at: string;
-  loyalty_points: number;
-  appointments: {
-    count: number;
-  } | null;
-  total_spent: {
-    sum: number;
-  } | null;
+  updated_at: string;
+  total_orders: number;
+  total_spent: number;
 }
 
 interface ColumnActions {
@@ -27,13 +25,15 @@ interface ColumnActions {
 
 export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Customer>[] => [
   {
-    accessorKey: "full_name",
+    accessorKey: "first_name",
     header: "Name",
     cell: ({ row }) => (
       <div>
-        <div className="font-medium">{row.getValue("full_name")}</div>
+        <div className="font-medium">
+          {row.getValue("first_name")} {row.original.last_name}
+        </div>
         <div className="sm:hidden text-sm text-muted-foreground">
-          {row.getValue("phone_number")} | {row.getValue("email")}
+          {row.original.phone} | {row.getValue("email")}
         </div>
       </div>
     )
@@ -46,8 +46,15 @@ export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Cu
     }
   },
   {
-    accessorKey: "phone_number",
+    accessorKey: "phone",
     header: "Phone",
+    meta: {
+      className: "hidden sm:table-cell"
+    }
+  },
+  {
+    accessorKey: "address",
+    header: "Address",
     meta: {
       className: "hidden sm:table-cell"
     }
@@ -64,46 +71,24 @@ export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Cu
     },
   },
   {
-    accessorKey: "appointments.count",
-    header: "Total Appointments",
+    accessorKey: "total_orders",
+    header: "Total Orders",
     meta: {
       className: "hidden sm:table-cell"
-    },
-    cell: ({ row }) => {
-      const appointments = row.original.appointments;
-      return appointments?.count || 0;
-    },
+    }
   },
   {
-    accessorKey: "total_spent.sum",
+    accessorKey: "total_spent",
     header: "Total Spent",
     meta: {
       className: "hidden sm:table-cell"
     },
     cell: ({ row }) => {
-      const totalSpent = row.original.total_spent;
-      return totalSpent ? `$${totalSpent.sum.toFixed(2)}` : '$0.00';
-    },
-  },
-  {
-    accessorKey: "loyalty_points",
-    header: "Loyalty Points",
-    cell: ({ row }) => {
-      const points = row.getValue("loyalty_points") as number;
-      const level = points >= 1000 ? 'Gold' : points >= 500 ? 'Silver' : 'Bronze';
-      const variants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-        'Gold': 'secondary',
-        'Silver': 'outline',
-        'Bronze': 'default'
-      };
-      return (
-        <div className="flex items-center gap-2">
-          <Badge variant={variants[level]}>
-            {level}
-          </Badge>
-          <span>{points} pts</span>
-        </div>
-      );
+      const amount = row.getValue("total_spent") as number;
+      return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES'
+      }).format(amount);
     },
   },
   {

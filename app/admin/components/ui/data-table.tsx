@@ -29,25 +29,47 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   searchKey: string;
+  pagination?: boolean;
+  pageCount?: number;
+  currentPage?: number;
+  onPageChange?: (page: number) => void;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  pagination = false,
+  pageCount = 1,
+  currentPage = 1,
+  onPageChange
 }: DataTableProps<TData, TValue>) {
   const [filtering, setFiltering] = useState("");
 
   const table = useReactTable({
     data,
     columns,
+    pageCount: pagination ? pageCount : undefined,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     state: {
       globalFilter: filtering,
+      pagination: pagination ? {
+        pageIndex: currentPage - 1,
+        pageSize: 10
+      } : undefined
     },
     onGlobalFilterChange: setFiltering,
+    manualPagination: pagination,
+    onPaginationChange: pagination && onPageChange ? 
+      (updater: any) => {
+        const newState = typeof updater === 'function' ? 
+          updater({ pageIndex: currentPage - 1, pageSize: 10 }) : 
+          updater;
+        onPageChange(newState.pageIndex + 1);
+      } : 
+      undefined
   });
 
   return (
@@ -107,24 +129,31 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
-      </div>
+      {pagination && pageCount > 1 && (
+        <div className="flex items-center justify-between px-2 py-4">
+          <div className="flex-1 text-sm text-muted-foreground">
+            Page {currentPage} of {pageCount}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

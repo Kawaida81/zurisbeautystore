@@ -2,28 +2,22 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
 import { format } from "date-fns";
-
-export type InventoryItem = {
-  id: string;
-  name: string;
-  quantity: number;
-  status: 'in_stock' | 'low_stock' | 'out_of_stock';
-  reorder_point: number;
-  last_restock_date: string;
-}
+import { History } from "lucide-react";
+import type { InventoryItem, StockStatus } from "@/lib/types/inventory";
 
 type StatusMapType = {
-  [K in InventoryItem['status']]: {
+  [K in StockStatus]: {
     label: string;
-    color: string;
+    variant: "default" | "warning" | "destructive";
   };
 };
 
 const statusMap: StatusMapType = {
-  in_stock: { label: "In Stock", color: "bg-green-500" },
-  low_stock: { label: "Low Stock", color: "bg-yellow-500" },
-  out_of_stock: { label: "Out of Stock", color: "bg-red-500" },
+  in_stock: { label: "In Stock", variant: "default" },
+  low_stock: { label: "Low Stock", variant: "warning" },
+  out_of_stock: { label: "Out of Stock", variant: "destructive" },
 };
 
 export const columns: ColumnDef<InventoryItem>[] = [
@@ -34,13 +28,20 @@ export const columns: ColumnDef<InventoryItem>[] = [
       <div>
         <div className="font-medium">{row.getValue("name")}</div>
         <div className="sm:hidden text-sm text-muted-foreground">
-          Stock: {row.getValue("quantity")} | Point: {row.getValue("reorder_point")}
+          Stock: {row.original.stock_quantity} | Point: {row.original.reorder_point}
         </div>
       </div>
     )
   },
   {
-    accessorKey: "quantity",
+    accessorKey: "category_name",
+    header: "Category",
+    meta: {
+      className: "hidden sm:table-cell"
+    },
+  },
+  {
+    accessorKey: "stock_quantity",
     header: "Current Stock",
     meta: {
       className: "hidden sm:table-cell"
@@ -50,11 +51,11 @@ export const columns: ColumnDef<InventoryItem>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as InventoryItem['status'];
-      const { label, color } = statusMap[status];
+      const status = row.getValue("status") as StockStatus;
+      const { label, variant } = statusMap[status];
       
       return (
-        <Badge className={`${color} text-white`}>
+        <Badge variant={variant}>
           {label}
         </Badge>
       );
@@ -77,5 +78,21 @@ export const columns: ColumnDef<InventoryItem>[] = [
       const date = row.getValue("last_restock_date") as string;
       return date ? format(new Date(date), "MMM d, yyyy") : "N/A";
     }
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            // Handle view history
+          }}
+        >
+          <History className="h-4 w-4" />
+        </Button>
+      );
+    },
   },
 ];

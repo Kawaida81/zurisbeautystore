@@ -13,7 +13,13 @@ import type {
   CategoriesListResponse,
   CreateCategoryInput,
   UpdateCategoryInput,
-  StockUpdate
+  StockUpdate,
+  InventoryResponse,
+  InventoryItem,
+  StockHistoryResponse,
+  StockAdjustment,
+  LowStockAlertsResponse,
+  LowStockAlert
 } from '@/lib/types/inventory'
 import { Database } from '@/lib/types/database'
 
@@ -69,8 +75,8 @@ export async function getProducts(
     if (filters.category_id) {
       query = query.eq('category_id', filters.category_id)
     }
-    if (filters.is_active !== undefined) {
-      query = query.eq('is_active', filters.is_active)
+    if (filters.status) {
+      query = query.eq('status', filters.status)
     }
     if (filters.min_stock !== undefined) {
       query = query.gte('stock_quantity', filters.min_stock)
@@ -219,48 +225,52 @@ export async function updateProduct(
   }
 }
 
+// Get inventory items with status and filters
+export async function getInventoryItems(
+  filters: ProductFilters = {},
+  pagination: PaginationParams = { page: 1, limit: 10 }
+): Promise<InventoryResponse> {
+  try {
+    const supabase = createClient()
+    const { data, error, count } = await supabase
+      .rpc('get_inventory_items', {
+        p_category_id: filters.category_id,
+        p_status: filters.status,
+        p_search: filters.search,
+        p_page: pagination.page,
+        p_limit: pagination.limit
+      })
+
+    if (error) throw error
+
+    const pageCount = Math.ceil((count || 0) / pagination.limit);
+    return {
+      data: {
+        items: data as unknown as InventoryItem[],
+        count: count || 0,
+        pageCount
+      },
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching inventory:', error)
+    return { data: { items: [], count: 0, pageCount: 0 }, error: error as Error }
+  }
+}
+
 // Update product stock
 export async function updateStock(update: StockUpdate): Promise<ProductResponse> {
   try {
     const supabase = createClient()
-    const { product_id, quantity, type } = update
+    const { product_id, quantity, type, notes } = update
 
-    // Get current stock
-    const { data: currentProduct, error: fetchError } = await supabase
-      .from('products')
-      .select('stock_quantity')
-      .eq('id', product_id)
-      .single()
-
-    if (fetchError) throw fetchError
-    if (!currentProduct) throw new Error('Product not found')
-
-    const currentStock = (currentProduct as Products).stock_quantity
-    let newQuantity: number
-    switch (type) {
-      case 'increment':
-        newQuantity = currentStock + quantity
-        break
-      case 'decrement':
-        newQuantity = Math.max(0, currentStock - quantity)
-        break
-      case 'set':
-        newQuantity = Math.max(0, quantity)
-        break
-      default:
-        throw new Error('Invalid update type')
-    }
-
-    // Update stock
     const { data, error } = await supabase
-      .from('products')
-      .update({ stock_quantity: newQuantity })
-      .eq('id', product_id)
-      .select(`
-        *,
-        category:product_categories(*)
-      `)
-      .single()
+      .rpc('update_stock_quantity', {
+        p_product_id: product_id,
+        p_quantity: quantity,
+        p_adjustment_type: type,
+        p_notes: notes
+      })
 
     if (error) throw error
 
@@ -271,6 +281,60 @@ export async function updateStock(update: StockUpdate): Promise<ProductResponse>
   } catch (error) {
     console.error('Error updating stock:', error)
     return { data: null, error: error as Error }
+  }
+}
+
+// Get stock adjustment history
+export async function getStockHistory(
+  productId?: string,
+  startDate: Date = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+  endDate: Date = new Date(),
+  pagination: PaginationParams = { page: 1, limit: 10 }
+): Promise<StockHistoryResponse> {
+  try {
+    const supabase = createClient()
+    const { data, error, count } = await supabase
+      .rpc('get_stock_history', {
+        p_product_id: productId,
+        p_start_date: startDate.toISOString(),
+        p_end_date: endDate.toISOString(),
+        p_page: pagination.page,
+        p_limit: pagination.limit
+      })
+
+    if (error) throw error
+
+    return {
+      data: data as unknown as StockAdjustment[],
+      count: count || 0,
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching stock history:', error)
+    return { data: [], count: 0, error: error as Error }
+  }
+}
+
+// Get low stock alerts
+export async function getLowStockAlerts(
+  categoryId?: string
+): Promise<LowStockAlertsResponse> {
+  try {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .rpc('get_low_stock_alerts', {
+        p_category_id: categoryId
+      })
+
+    if (error) throw error
+
+    return {
+      data: data as unknown as LowStockAlert[],
+      error: null
+    }
+  } catch (error) {
+    console.error('Error fetching low stock alerts:', error)
+    return { data: [], error: error as Error }
   }
 }
 

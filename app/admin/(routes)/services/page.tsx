@@ -26,17 +26,7 @@ export default function ServicesPage() {
   const fetchServices = async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from('services')
-        .select(`
-          id,
-          name,
-          category,
-          duration,
-          price,
-          description,
-          is_active
-        `);
+      const { data, error } = await supabase.rpc('list_services');
 
       if (error) throw error;
       setServices(data || []);
@@ -58,10 +48,9 @@ export default function ServicesPage() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase
-        .from('services')
-        .delete()
-        .eq('id', service.id);
+      const { error } = await supabase.rpc('delete_service', {
+        p_service_id: service.id
+      });
 
       if (error) throw error;
       await fetchServices();

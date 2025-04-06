@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/ui/data-table'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Heading } from '@/components/ui/heading'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
@@ -16,10 +17,13 @@ import { toast } from 'react-hot-toast'
 import type { Customer } from './columns'
 
 export default function CustomersPage() {
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>()
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const supabase = createClient()
 
   useEffect(() => {
@@ -28,15 +32,12 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
-      setIsLoading(true)
-      const { data, error } = await supabase
-        .from('customers')
-        .select(`
-          *,
-          appointments:appointments(count),
-          total_spent:orders(sum(total_amount))
-        `)
-        .order('created_at', { ascending: false })
+      setLoading(true)
+      const { data, error } = await supabase.rpc('list_customers', {
+        p_search: search || null,
+        p_sort_by: sortBy,
+        p_sort_order: sortOrder
+      })
 
       if (error) throw error
       setCustomers(data || [])
@@ -44,28 +45,47 @@ export default function CustomersPage() {
       console.error('Error fetching customers:', error)
       toast.error('Failed to load customers. Please try again.')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchCustomers()
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [search, sortBy, sortOrder])
+
   const handleCreate = () => {
-    setEditingCustomer(null)
+    setSelectedCustomer(undefined)
     setIsModalOpen(true)
   }
 
   const handleEdit = (customer: Customer) => {
-    setEditingCustomer(customer)
+    setSelectedCustomer(customer)
     setIsModalOpen(true)
   }
 
   const handleDelete = async (customer: Customer) => {
-    try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', customer.id)
+    if (!confirm('Are you sure you want to delete this customer? This action cannot be undone if they have existing orders.')) {
+      return
+    }
 
-      if (error) throw error
+    try {
+      const { error } = await supabase.rpc('delete_customer', {
+        p_customer_id: customer.id
+      })
+
+      if (error) {
+        if (error.message.includes('existing orders')) {
+          toast.error('Cannot delete customer with existing orders')
+        } else {
+          throw error
+        }
+        return
+      }
+
       await fetchCustomers()
       toast.success('Customer deleted successfully')
     } catch (error) {
@@ -76,12 +96,7 @@ export default function CustomersPage() {
 
   const handleModalClose = () => {
     setIsModalOpen(false)
-    setEditingCustomer(null)
-  }
-
-  const handleModalSubmit = async () => {
-    await fetchCustomers()
-    handleModalClose()
+    setSelectedCustomer(undefined)
   }
 
   return (
@@ -90,19 +105,49 @@ export default function CustomersPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <Heading
             title="Customers"
-            description="Manage your customer profiles and loyalty points"
+            description="Manage your customer profiles and view their order history"
           />
           <Button 
             onClick={handleCreate}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto flex items-center gap-2"
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="h-4 w-4" />
             Add Customer
           </Button>
         </div>
         <Separator />
         <Card className="p-4">
-          {isLoading ? (
+          <div className="mb-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="w-full sm:w-auto">
+              <Input
+                placeholder="Search customers..."
+                value={search}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3"
+              >
+                <option value="created_at">Join Date</option>
+                <option value="name">Name</option>
+                <option value="total_orders">Total Orders</option>
+                <option value="total_spent">Total Spent</option>
+              </select>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </Button>
+            </div>
+          </div>
+
+          {loading ? (
             <div className="flex items-center justify-center h-24">
               <LoadingSpinner size={40} />
             </div>
@@ -114,17 +159,18 @@ export default function CustomersPage() {
                   onDelete: handleDelete
                 })}
                 data={customers}
-                searchKey="full_name"
+                searchKey="first_name"
               />
             </div>
           )}
         </Card>
       </div>
+
       <CustomerModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
-        onSubmit={handleModalSubmit}
-        customer={editingCustomer}
+        onSuccess={fetchCustomers}
+        customer={selectedCustomer}
       />
     </div>
   )

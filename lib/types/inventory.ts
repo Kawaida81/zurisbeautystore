@@ -45,11 +45,13 @@ export interface ProductsListResponse {
 
 // Filter and Pagination
 export interface ProductFilters {
-  category_id?: string
-  is_active?: boolean
-  search?: string
-  min_stock?: number
-  max_stock?: number
+  category_id?: string;
+  status?: StockStatus;
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  min_stock?: number;
+  max_stock?: number;
 }
 
 export interface PaginationParams {
@@ -90,5 +92,53 @@ export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock'
 export interface StockUpdate {
   product_id: string
   quantity: number
-  type: 'increment' | 'decrement' | 'set'
+  type: 'add' | 'remove' | 'set'
+  notes?: string
+}
+
+export interface StockAdjustment {
+  id: string
+  product_id: string
+  product_name: string
+  previous_quantity: number
+  adjustment_quantity: number
+  new_quantity: number
+  adjustment_type: 'add' | 'remove' | 'set'
+  notes?: string
+  created_at: string
+}
+
+export interface StockHistoryResponse {
+  data: StockAdjustment[]
+  count: number
+  error: Error | null
+}
+
+export interface InventoryItem extends Product {
+  category_name: string
+  status: StockStatus
+}
+
+export interface InventoryResponse {
+  data: {
+    items: InventoryItem[];
+    count: number;
+    pageCount: number;
+  };
+  error: Error | null
+}
+
+export interface LowStockAlert {
+  id: string
+  name: string
+  category_id: string
+  category_name: string
+  stock_quantity: number
+  reorder_point: number
+  status: StockStatus
+}
+
+export interface LowStockAlertsResponse {
+  data: LowStockAlert[]
+  error: Error | null
 } 
