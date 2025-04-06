@@ -5,15 +5,18 @@ import { Toaster } from 'sonner'
 import { SupabaseProvider } from './supabase-provider'
 import { CartProvider } from './cart-provider'
 import { SearchProvider } from './search-provider'
+import QueryProvider from './query-provider'
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <SupabaseProvider>
       <CartProvider>
-        <SearchProvider>
-          <Toaster position="top-center" />
-          {children}
-        </SearchProvider>
+        <QueryProvider>
+          <SearchProvider>
+            <Toaster position="top-center" />
+            {children}
+          </SearchProvider>
+        </QueryProvider>
       </CartProvider>
     </SupabaseProvider>
   )

@@ -25,8 +25,8 @@ import { StockHistoryDialog } from './stock-history-dialog';
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedStatus, setSelectedStatus] = useState<StockStatus | ''>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<StockStatus | 'all'>('all');
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [showAdjustDialog, setShowAdjustDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -38,8 +38,8 @@ export default function InventoryPage() {
       const filters: ProductFilters = {
         page: currentPage,
         pageSize: 10,
-        category_id: selectedCategory || undefined,
-        status: selectedStatus || undefined
+        category_id: selectedCategory === 'all' ? undefined : selectedCategory,
+        status: selectedStatus === 'all' ? undefined : selectedStatus
       };
       
       return getInventoryItems(filters);
@@ -174,7 +174,7 @@ export default function InventoryPage() {
                   <SelectValue defaultValue="" placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categoriesData?.map((category: ProductCategory) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -186,8 +186,8 @@ export default function InventoryPage() {
             <Select
               value={selectedStatus}
               onValueChange={(value: string) => {
-                if (value === '' || ['in_stock', 'low_stock', 'out_of_stock'].includes(value)) {
-                  setSelectedStatus(value as StockStatus | '');
+                if (value === 'all' || ['in_stock', 'low_stock', 'out_of_stock'].includes(value)) {
+                  setSelectedStatus(value as StockStatus | 'all');
                 }
               }}
             >
@@ -195,7 +195,7 @@ export default function InventoryPage() {
                 <SelectValue defaultValue="" placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="in_stock">In Stock</SelectItem>
                 <SelectItem value="low_stock">Low Stock</SelectItem>
                 <SelectItem value="out_of_stock">Out of Stock</SelectItem>
