@@ -1,19 +1,28 @@
 import { createClient } from '@/lib/supabase/client'
-import type { Database } from '@/lib/database.types'
+import { NotificationTable } from '@/lib/types/database'
 
-export type Notification = Database['public']['Tables']['notifications']['Row']
+export type Notification = NotificationTable['Row']
 
 // Get notifications for the current user
 export async function getNotifications(status?: 'unread' | 'read' | 'archived'): Promise<{ data: Notification[] }> {
+  const supabase = createClient()
+
   try {
-    const supabase = createClient()
-    const query = supabase
+    // First check if we have an active session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session) {
+      console.error('No active session:', sessionError)
+      return { data: [] }
+    }
+
+    let query = supabase
       .from('notifications')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
 
     if (status) {
-      query.eq('status', status)
+      query = query.eq('status', status)
     }
 
     const { data, error } = await query
@@ -23,85 +32,108 @@ export async function getNotifications(status?: 'unread' | 'read' | 'archived'):
       return { data: [] }
     }
 
-    return { data: (data || []) as Notification[] }
-  } catch (error) {
-    console.error('Error in getNotifications:', error)
+    return { data: data || [] }
+  } catch (e) {
+    console.error('Error in getNotifications:', e)
     return { data: [] }
   }
 }
 
-// Mark a notification as read
-export async function markNotificationAsRead(notificationId: string) {
-  try {
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('notifications')
-      .update({ status: 'read' })
-      .eq('id', notificationId)
-
-    if (error) {
-      console.error('Error marking notification as read:', error)
-      return { success: false }
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error('Error in markNotificationAsRead:', error)
-    return { success: false }
-  }
-}
-
 // Get unread notifications count
-export async function getUnreadNotificationsCount(): Promise<{ count: number }> {
+export async function getUnreadCount(): Promise<number> {
+  const supabase = createClient()
+
   try {
-    const supabase = createClient()
-    
-    // Get current user first
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      console.error('Error getting user:', userError)
-      return { count: 0 }
+    // First check if we have an active session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session) {
+      console.error('No active session:', sessionError)
+      return 0
     }
 
     const { count, error } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
+      .eq('user_id', session.user.id)
       .eq('status', 'unread')
-      .eq('user_id', user.id)
 
     if (error) {
-      console.error('Error getting unread notifications count:', error)
-      return { count: 0 }
+      console.error('Error getting unread count:', error)
+      return 0
     }
 
-    return { count: count || 0 }
-  } catch (error) {
-    console.error('Error in getUnreadNotificationsCount:', error)
-    return { count: 0 }
+    return count || 0
+  } catch (e) {
+    console.error('Error in getUnreadCount:', e)
+    return 0
+  }
+}
+
+// Mark a notification as read
+export async function markAsRead(notificationId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  try {
+    // First check if we have an active session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session) {
+      console.error('No active session:', sessionError)
+      return false
+    }
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ status: 'read' })
+      .eq('id', notificationId)
+      .eq('user_id', session.user.id)
+
+    if (error) {
+      console.error('Error marking notification as read:', error)
+      return false
+    }
+
+    return true
+  } catch (e) {
+    console.error('Error in markAsRead:', e)
+    return false
   }
 }
 
 // Subscribe to new notifications
-export function subscribeToNotifications(callback: (notification: Notification) => void) {
+export async function subscribeToNotifications(
+  callback: (notification: Notification) => void
+): Promise<() => void> {
   const supabase = createClient()
-  
-  const subscription = supabase
-    .channel('notifications')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications'
-      },
-      (payload) => {
-        callback(payload.new as Notification)
-      }
-    )
-    .subscribe()
 
-  return () => {
-    subscription.unsubscribe()
+  try {
+    // First check if we have an active session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session) {
+      console.error('No active session:', sessionError)
+      return () => {}
+    }
+
+    const subscription = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          callback(payload.new as Notification)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  } catch (e) {
+    console.error('Error in subscribeToNotifications:', e)
+    return () => {}
   }
-} 
+}

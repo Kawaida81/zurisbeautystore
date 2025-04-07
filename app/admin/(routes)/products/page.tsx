@@ -27,21 +27,26 @@ interface Category {
 interface Product {
   id: string
   name: string
-  description: string
+  description: string | null
   price: number
   stock_quantity: number
   reorder_point: number
-  image_url: string
+  image_url: string | null
   created_at: string
-  category_id: string
+  category_id: string | null
   category: {
     id: string
     name: string
-  }
+  } | null
+  updated_at?: string
+}
+
+interface ProductWithLowStock extends Product {
+  is_low_stock?: boolean
 }
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] = useState<ProductWithLowStock[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,17 +69,17 @@ export default function ProductsPage() {
 
   const fetchProducts = async () => {
     try {
-      // First try to check if the function exists
-      const { data: functions } = await supabase.rpc('list_functions')
-      console.log('Available functions:', functions)
+      // Build base query with filters
+      let baseQuery = '*,category:product_categories(*)'
+      
+      // If showing low stock, modify the query to include the comparison
+      if (showLowStock) {
+        baseQuery = `*, category:product_categories(*), (stock_quantity <= reorder_point) as is_low_stock`
+      }
 
-      // Build query with filters
       let query = supabase
         .from('products')
-        .select(`
-          *,
-          category:product_categories(*)
-        `)
+        .select(baseQuery)
 
       // Apply search filter
       if (debouncedSearch) {
@@ -88,7 +93,7 @@ export default function ProductsPage() {
 
       // Apply low stock filter
       if (showLowStock) {
-        query = query.filter('stock_quantity', 'lt', 'reorder_point')
+        query = query.eq('is_low_stock', true)
       }
 
       // Execute query with ordering
@@ -97,30 +102,14 @@ export default function ProductsPage() {
 
       if (directError) {
         console.error('Direct query error:', directError)
-      } else {
-        console.log('Direct query result:', directData)
-        if (directData && directData.length > 0) {
-          setProducts(directData)
-          return
-        }
+        throw directError
       }
 
-      // Try RPC as fallback
-      const { data: productsData, error: productsError } = await supabase.rpc(
-        'list_products',
-        {
-          p_category_id: selectedCategory || null,
-          p_search_term: searchQuery || null,
-          p_low_stock_only: showLowStock,
-          p_page: 1,
-          p_page_size: 50
-        }
-      )
-
-      console.log('RPC response:', { productsData, productsError })
-
-      if (productsError) throw productsError
-      setProducts(productsData?.data || [])
+      if (directData) {
+        setProducts(directData as unknown as ProductWithLowStock[])
+      } else {
+        setProducts([])
+      }
     } catch (error) {
       console.error('Error fetching products:', error)
       toast.error('Failed to load products')
@@ -143,14 +132,14 @@ export default function ProductsPage() {
   }
 
   const handleDelete = async (productId: string) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return
-
     try {
-      const { error } = await supabase.rpc('delete_product', {
-        p_product_id: productId
-      })
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId)
 
       if (error) throw error
+
       toast.success('Product deleted successfully')
       fetchProducts()
     } catch (error) {
@@ -256,12 +245,12 @@ export default function ProductsPage() {
                         </p>
                         <div className="sm:hidden text-sm text-muted-foreground">
                           <p>Stock: {product.stock_quantity}</p>
-                          <p className="capitalize">{product.category.name}</p>
+                          <p className="capitalize">{product.category?.name}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell capitalize">
-                      {product.category.name}
+                      {product.category?.name}
                     </TableCell>
                     <TableCell>KSh {product.price.toLocaleString()}</TableCell>
                     <TableCell className="hidden sm:table-cell">

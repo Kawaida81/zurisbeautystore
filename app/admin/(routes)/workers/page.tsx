@@ -10,37 +10,60 @@ import { Plus } from "lucide-react";
 import { createColumns } from "./columns";
 import { createClient } from "@/lib/supabase/client";
 import { WorkerModal } from "./worker-modal";
-import { LoadingSpinner } from '@/app/admin/components/loading-spinner';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'react-hot-toast';
-import type { Worker } from "./columns";
+
+interface Worker {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
 
 export default function WorkersPage() {
-  const [isLoading, setIsLoading] = useState(false);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
-
-  useEffect(() => {
-    fetchWorkers();
-  }, []);
 
   const fetchWorkers = async () => {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('workers')
-        .select('*');
+        .from('users')
+        .select('*')
+        .eq('role', 'worker');
 
-      if (error) throw error;
-      setWorkers(data || []);
+      if (error) {
+        toast.error('Failed to fetch workers');
+        return;
+      }
+
+      if (data) {
+        setWorkers(data.map(worker => ({
+          id: worker.id,
+          name: worker.full_name,
+          email: worker.email,
+          phone: worker.phone || '',
+          role: worker.role,
+          created_at: worker.created_at,
+          updated_at: worker.updated_at
+        })));
+      }
     } catch (error) {
-      console.error('Error fetching workers:', error);
-      toast.error('Failed to load workers. Please try again.');
+      toast.error('An error occurred while fetching workers');
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchWorkers();
+  }, []);
 
   const handleCreate = () => {
     setEditingWorker(null);
@@ -52,73 +75,57 @@ export default function WorkersPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (worker: Worker) => {
+  const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('workers')
+        .from('users')
         .delete()
-        .eq('id', worker.id);
+        .eq('id', id);
 
-      if (error) throw error;
-      await fetchWorkers();
+      if (error) {
+        toast.error('Failed to delete worker');
+        return;
+      }
+
+      setWorkers(workers.filter(worker => worker.id !== id));
       toast.success('Worker deleted successfully');
     } catch (error) {
-      console.error('Error deleting worker:', error);
-      toast.error('Failed to delete worker. Please try again.');
+      toast.error('An error occurred while deleting worker');
     }
   };
 
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    setEditingWorker(null);
-  };
-
-  const handleModalSubmit = async () => {
-    await fetchWorkers();
-    handleModalClose();
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <LoadingSpinner size={40} />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex-col">
-      <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <Heading
-            title="Workers"
-            description="Manage your beauty salon workers"
-          />
-          <Button 
-            onClick={handleCreate}
-            className="w-full sm:w-auto"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Worker
-          </Button>
-        </div>
-        <Separator />
-        <Card className="p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-24">
-              <LoadingSpinner size={40} />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <DataTable
-                columns={createColumns({
-                  onEdit: handleEdit,
-                  onDelete: handleDelete
-                })}
-                data={workers}
-                searchKey="name"
-              />
-            </div>
-          )}
-        </Card>
+    <div className="flex flex-col gap-4 p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Workers</h2>
+        <Button onClick={handleCreate}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Worker
+        </Button>
+      </div>
+      <div className="rounded-md border">
+        <DataTable
+          columns={createColumns({
+            onEdit: handleEdit,
+            onDelete: handleDelete
+          })}
+          data={workers}
+          searchKey="name"
+        />
       </div>
       <WorkerModal
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
-        onSubmit={handleModalSubmit}
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         worker={editingWorker}
+        onSuccess={fetchWorkers}
       />
     </div>
   );

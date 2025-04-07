@@ -8,8 +8,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/app/admin/components/ui/modal";
 import { toast } from 'react-hot-toast';
-import type { Message } from './columns';
 import { createClient } from "@/lib/supabase/client";
+import type { Message } from './columns';
+
+interface DatabaseUser {
+  id: string;
+  full_name: string | null;
+}
+
+interface RawAppointment {
+  id: string;
+  appointment_date: string;
+  time: string;
+  client_id: string | null;
+  client: DatabaseUser | null;
+}
+
+interface DatabaseAppointment {
+  id: string;
+  appointment_date: string;
+  time: string;
+  client_id: string;
+  client: {
+    id: string;
+    full_name: string;
+  };
+}
 
 interface MessageModalProps {
   isOpen: boolean;
@@ -18,47 +42,32 @@ interface MessageModalProps {
   message?: Message | null;
 }
 
-interface Customer {
-  id: string;
-  full_name: string;
-}
-
-interface Appointment {
-  id: string;
-  date: string;
-  time: string;
-  customer: {
-    id: string;
-    full_name: string;
-  };
-}
-
 export function MessageModal({
   isOpen,
   onClose,
   onSubmit,
   message
 }: MessageModalProps) {
-  const [formData, setFormData] = useState({
-    customer_id: '',
-    appointment_id: '',
-    type: 'appointment_reminder' as Message['type'],
+  const [formData, setFormData] = useState<Omit<Message, 'id' | 'client' | 'appointment'>>({
+    client_id: '',
+    appointment_id: null,
+    type: 'appointment_reminder',
     subject: '',
     message: '',
-    status: 'scheduled' as Message['status'],
+    status: 'scheduled',
     scheduled_for: new Date().toISOString().slice(0, 16)
   });
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [clients, setClients] = useState<Message['client'][]>([]);
+  const [appointments, setAppointments] = useState<DatabaseAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
     if (message) {
       setFormData({
-        customer_id: message.customer.id,
-        appointment_id: message.appointment?.id || '',
+        client_id: message.client_id,
+        appointment_id: message.appointment_id,
         type: message.type,
         subject: message.subject,
         message: message.message,
@@ -72,20 +81,50 @@ export function MessageModal({
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [customersData, appointmentsData] = await Promise.all([
-        supabase.from('customers').select('id, full_name'),
-        supabase.from('appointments').select('id, date, time, customer:customers!inner(id, full_name)')
-          .gte('date', new Date().toISOString().split('T')[0])
+      const [clientsData, appointmentsData] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, full_name')
+          .eq('role', 'client'),
+        supabase
+          .from('appointments')
+          .select(`
+            id,
+            appointment_date,
+            time,
+            client_id,
+            client:users!client_id (
+              id,
+              full_name
+            )
+          `)
+          .gte('appointment_date', new Date().toISOString().split('T')[0])
       ]);
 
-      if (customersData.error) throw customersData.error;
+      if (clientsData.error) throw clientsData.error;
       if (appointmentsData.error) throw appointmentsData.error;
 
-      setCustomers(customersData.data || []);
-      setAppointments(appointmentsData.data?.map(apt => ({
-        ...apt,
-        customer: Array.isArray(apt.customer) ? apt.customer[0] : apt.customer
-      })) || []);
+      setClients(clientsData.data || []);
+
+      const rawAppointments = (appointmentsData.data || []) as unknown as RawAppointment[];
+      const validAppointments = rawAppointments
+        .filter((apt): apt is RawAppointment => 
+          apt.client_id !== null && 
+          apt.client !== null &&
+          apt.client.full_name !== null
+        )
+        .map((apt): DatabaseAppointment => ({
+          id: apt.id,
+          appointment_date: apt.appointment_date,
+          time: apt.time,
+          client_id: apt.client_id!,
+          client: {
+            id: apt.client!.id,
+            full_name: apt.client!.full_name!
+          }
+        }));
+
+      setAppointments(validAppointments);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -97,32 +136,29 @@ export function MessageModal({
     e.preventDefault();
     setIsLoading(true);
     try {
+      const messageData = {
+        action: 'message',
+        details: {
+          client_id: formData.client_id,
+          appointment_id: formData.appointment_id,
+          type: formData.type,
+          subject: formData.subject,
+          message: formData.message,
+          status: formData.status,
+          scheduled_for: formData.scheduled_for
+        }
+      };
+
       if (message?.id) {
         const { error } = await supabase
-          .from('messages')
-          .update({
-            customer_id: formData.customer_id,
-            appointment_id: formData.appointment_id || null,
-            type: formData.type,
-            subject: formData.subject,
-            message: formData.message,
-            status: formData.status,
-            scheduled_for: formData.scheduled_for
-          })
+          .from('user_activities')
+          .update(messageData)
           .eq('id', message.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('messages')
-          .insert([{
-            customer_id: formData.customer_id,
-            appointment_id: formData.appointment_id || null,
-            type: formData.type,
-            subject: formData.subject,
-            message: formData.message,
-            status: formData.status,
-            scheduled_for: formData.scheduled_for
-          }]);
+          .from('user_activities')
+          .insert([messageData]);
         if (error) throw error;
       }
       toast.success(message ? 'Message updated successfully' : 'Message created successfully');
@@ -135,29 +171,28 @@ export function MessageModal({
     }
   };
 
-
-
   return (
     <Modal
       title={message ? 'Edit Message' : 'New Message'}
+      description="Create or edit a message to send to a client"
       isOpen={isOpen}
       onClose={onClose}
-      isLoading={isLoading}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="customer">Customer</Label>
+            <Label htmlFor="client">Client</Label>
             <Select
-              value={formData.customer_id}
-              onValueChange={(value: string) => setFormData({ ...formData, customer_id: value })}
+              value={formData.client_id}
+              onValueChange={(value) => setFormData({ ...formData, client_id: value })}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select customer" />
+                <SelectValue placeholder="Select client" />
               </SelectTrigger>
               <SelectContent>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.full_name}
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.full_name || 'Unnamed Client'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -184,18 +219,18 @@ export function MessageModal({
             <div>
               <Label htmlFor="appointment">Related Appointment</Label>
               <Select
-                value={formData.appointment_id}
-                onValueChange={(value: string) => setFormData({ ...formData, appointment_id: value })}
+                value={formData.appointment_id || ''}
+                onValueChange={(value) => setFormData({ ...formData, appointment_id: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select appointment" />
                 </SelectTrigger>
                 <SelectContent>
                   {appointments
-                    .filter(apt => apt.customer.id === formData.customer_id)
+                    .filter(apt => apt.client_id === formData.client_id)
                     .map((appointment) => (
                       <SelectItem key={appointment.id} value={appointment.id}>
-                        {new Date(appointment.date).toLocaleDateString()} {appointment.time}
+                        {new Date(appointment.appointment_date).toLocaleDateString()} {appointment.time}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -254,7 +289,8 @@ export function MessageModal({
               {message ? 'Update' : 'Create'}
             </Button>
           </div>
-        </form>
+        </div>
+      </form>
     </Modal>
   );
 }

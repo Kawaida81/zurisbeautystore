@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { createColumns } from './columns'
 import { CustomerModal } from './customer-modal'
-import { LoadingSpinner } from '@/app/admin/components/loading-spinner'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { toast } from 'react-hot-toast'
 
 import type { Customer } from './columns'

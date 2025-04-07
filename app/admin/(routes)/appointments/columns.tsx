@@ -1,110 +1,107 @@
 'use client';
 
 import { ColumnDef } from "@tanstack/react-table";
+import { Button } from "@/app/admin/components/ui/button";
+import { Edit, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Edit, Trash } from "lucide-react";
+import { format } from "date-fns";
 
 export interface Appointment {
   id: string;
-  customer: {
-    id: string;
-    name: string;
-  };
-  service: {
-    id: string;
-    name: string;
-  };
-  worker: {
-    id: string;
-    name: string;
-  };
   date: string;
-  time: string;
+  appointment_date: string;
   duration: number;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-  notes?: string;
+  client_id: string | null;
+  created_at: string | null;
+  notes: string | null;
+  service: string;
+  service_id: string | null;
+  service_name: string | null;
+  status: string;
+  worker_id: string | null;
+  customer?: any;
+  worker?: any;
+  time?: string;
 }
 
-interface ColumnActions {
-  onEdit?: (appointment: Appointment) => void;
-  onDelete?: (appointment: Appointment) => void;
+interface AppointmentColumnsProps {
+  onEdit: (appointment: Appointment) => void;
+  onDelete: (appointment: Appointment) => void;
 }
 
-export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Appointment>[] => [
-  {
-    accessorKey: "customer.name",
-    header: "Customer",
-  },
-  {
-    accessorKey: "service.name",
-    header: "Service",
-  },
-  {
-    accessorKey: "worker.name",
-    header: "Worker",
-  },
-  {
-    accessorKey: "date",
-    header: "Date",
-    cell: ({ row }) => {
-      const date = new Date(row.getValue("date"));
-      return date.toLocaleDateString();
+export function createColumns({ onEdit, onDelete }: AppointmentColumnsProps): ColumnDef<Appointment>[] {
+  return [
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ row }) => {
+        const date = row.getValue("date") as string;
+        return format(new Date(date), "PPP");
+      }
     },
-  },
-  {
-    accessorKey: "time",
-    header: "Time",
-  },
-  {
-    accessorKey: "duration",
-    header: "Duration",
-    cell: ({ row }) => {
-      const duration = row.getValue("duration") as number;
-      return `${duration} min`;
+    {
+      accessorKey: "time",
+      header: "Time",
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("date") as string);
+        return format(date, "p");
+      }
     },
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.getValue("status") as string;
-      const variants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-        'scheduled': 'default',
-        'in-progress': 'secondary',
-        'completed': 'default',
-        'cancelled': 'destructive'
-      };
-      return (
-        <Badge variant={variants[status] || 'default'}>
-          {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-        </Badge>
-      );
+    {
+      accessorKey: "customer",
+      header: "Customer",
+      cell: ({ row }) => row.original.customer?.name || "N/A"
     },
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const appointment = row.original;
-      
-      return (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit?.(appointment)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onDelete?.(appointment)}
-          >
-            <Trash className="h-4 w-4" />
-          </Button>
-        </div>
-      );
+    {
+      accessorKey: "service",
+      header: "Service",
+      cell: ({ row }) => {
+        const service = row.getValue("service");
+        return typeof service === 'object' && service !== null ? 
+          (service as { name: string }).name : 
+          service || "N/A";
+      }
     },
-  },
-];
+    {
+      accessorKey: "worker",
+      header: "Worker",
+      cell: ({ row }) => row.original.worker?.name || "Unassigned"
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string;
+        return (
+          <Badge variant={status === "completed" ? "default" : "secondary"}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Badge>
+        );
+      }
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const appointment = row.original;
+        return (
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onEdit(appointment)}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete(appointment)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      }
+    }
+  ];
+}

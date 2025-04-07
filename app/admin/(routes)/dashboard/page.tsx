@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { LoadingSpinner } from '@/app/admin/components/loading-spinner'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { toast } from 'react-hot-toast'
 
 interface DashboardMetrics {

@@ -1,7 +1,13 @@
 import { Database as DatabaseGenerated } from '@/types/supabase'
 
 // Re-export the generated database type
-export type Database = DatabaseGenerated
+export type Database = DatabaseGenerated & {
+  public: {
+    Tables: {
+      notifications: NotificationTable
+    } & DatabaseGenerated['public']['Tables']
+  }
+}
 
 export type Tables = Database['public']['Tables']
 export type Enums = Database['public']['Enums']
@@ -10,6 +16,7 @@ export type Enums = Database['public']['Enums']
 export type AppointmentStatusEnum = 'pending' | 'confirmed' | 'cancelled' | 'completed'
 export type ContactPreferenceEnum = 'email' | 'phone' | 'sms'
 export type UserRoleEnum = 'admin' | 'worker' | 'client'
+export type NotificationStatus = 'unread' | 'read' | 'archived'
 
 // Specific table types
 export type User = TableRow<'users'>
@@ -21,6 +28,37 @@ export type SaleItem = TableRow<'sale_items'>
 export type Product = TableRow<'products'>
 export type ProductCategory = TableRow<'product_categories'>
 export type Review = TableRow<'reviews'>
+export type Notification = TableRow<'notifications'>
+
+// Define the notifications table type
+export interface NotificationTable {
+  Row: {
+    id: string
+    user_id: string
+    title: string
+    message: string
+    status: NotificationStatus
+    created_at: string
+    updated_at: string
+  }
+  Insert: {
+    id?: string
+    user_id: string
+    title: string
+    message: string
+    status?: NotificationStatus
+    created_at?: string
+    updated_at?: string
+  }
+  Update: {
+    id?: string
+    user_id?: string
+    title?: string
+    message?: string
+    status?: NotificationStatus
+    updated_at?: string
+  }
+}
 
 // Join types
 export interface AppointmentWithRelations extends Omit<Appointment, 'service'> {
@@ -81,7 +119,7 @@ export type UserRole = UserRoleEnum
 export type ContactPreference = ContactPreferenceEnum
 
 // Notification types (not in database)
-export interface Notification {
+export interface NotificationDisplay {
   id: string
   user_id: string
   title: string

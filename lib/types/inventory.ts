@@ -2,7 +2,14 @@ import { Database } from './database'
 
 // Base Types
 export type Product = Database['public']['Tables']['products']['Row']
-export type ProductCategory = Database['public']['Tables']['product_categories']['Row']
+export type ProductCategory = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 // Extended Types with Relations
 export interface ProductWithRelations extends Product {
@@ -46,12 +53,16 @@ export interface ProductsListResponse {
 // Filter and Pagination
 export interface ProductFilters {
   category_id?: string;
-  status?: StockStatus;
+  status?: StockStatus | 'all';
+  search?: string;
   page?: number;
   pageSize?: number;
-  search?: string;
   min_stock?: number;
   max_stock?: number;
+  sort?: {
+    field: string;
+    direction: 'asc' | 'desc';
+  };
 }
 
 export interface PaginationParams {
@@ -114,31 +125,36 @@ export interface StockHistoryResponse {
   error: Error | null
 }
 
-export interface InventoryItem extends Product {
-  category_name: string
-  status: StockStatus
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  price: number;
+  stock_quantity: number;
+  reorder_point: number;
+  status: StockStatus;
+  created_at: string;
+  total_count: number;
 }
 
 export interface InventoryResponse {
-  data: {
-    items: InventoryItem[];
-    count: number;
-    pageCount: number;
-  };
-  error: Error | null
+  data: InventoryItem[];
+  count: number;
+  pageCount: number;
+  error: Error | null;
 }
 
 export interface LowStockAlert {
-  id: string
-  name: string
-  category_id: string
-  category_name: string
-  stock_quantity: number
-  reorder_point: number
-  status: StockStatus
+  id: string;
+  name: string;
+  stock_quantity: number;
+  reorder_point: number;
+  status: StockStatus;
 }
 
 export interface LowStockAlertsResponse {
-  data: LowStockAlert[]
-  error: Error | null
-} 
+  data: LowStockAlert[];
+  error: Error | null;
+}

@@ -13,19 +13,25 @@ import Link from 'next/link'
 type WorkerProfile = {
   id: string
   email: string
-  first_name: string | null
-  last_name: string | null
+  full_name: string
   phone: string | null
-  role: 'worker'
-  is_active: boolean
-  created_at: string
+  role: string
+  is_active: boolean | null
+  created_at: string | null
+  last_login: string | null
+  updated_at: string | null
+}
+
+type WorkerProfileFormData = {
+  full_name?: string
+  phone?: string | null
 }
 
 export function WorkerProfile() {
   const [profile, setProfile] = useState<WorkerProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
-  const [formData, setFormData] = useState<Partial<WorkerProfile>>({})
+  const [formData, setFormData] = useState<WorkerProfileFormData>({})
 
   useEffect(() => {
     fetchProfile()
@@ -48,10 +54,9 @@ export function WorkerProfile() {
 
       if (error) throw error
 
-      setProfile(data as WorkerProfile)
+      setProfile(data)
       setFormData({
-        first_name: data.first_name,
-        last_name: data.last_name,
+        full_name: data.full_name,
         phone: data.phone
       })
     } catch (error) {
@@ -62,7 +67,7 @@ export function WorkerProfile() {
     }
   }
 
-  const handleInputChange = (field: keyof WorkerProfile, value: string) => {
+  const handleInputChange = (field: keyof WorkerProfileFormData, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -71,13 +76,22 @@ export function WorkerProfile() {
 
   const handleSave = async () => {
     try {
+      if (!profile?.id) {
+        throw new Error('Profile not found')
+      }
+
       setLoading(true)
       const supabase = createClient()
 
+      // Only include fields that are actually defined
+      const updateData = Object.fromEntries(
+        Object.entries(formData).filter(([_, value]) => value !== undefined)
+      )
+
       const { error } = await supabase
         .from('users')
-        .update(formData)
-        .eq('id', profile?.id)
+        .update(updateData)
+        .eq('id', profile.id)
 
       if (error) throw error
 
@@ -118,8 +132,7 @@ export function WorkerProfile() {
           onClick={() => {
             if (isEditing) {
               setFormData({
-                first_name: profile?.first_name,
-                last_name: profile?.last_name,
+                full_name: profile?.full_name,
                 phone: profile?.phone
               })
             }
@@ -137,21 +150,11 @@ export function WorkerProfile() {
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="first_name">First Name</Label>
+              <Label htmlFor="full_name">Full Name</Label>
               <Input
-                id="first_name"
-                value={isEditing ? formData.first_name || '' : profile?.first_name || ''}
-                onChange={(e) => handleInputChange('first_name', e.target.value)}
-                disabled={!isEditing}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="last_name">Last Name</Label>
-              <Input
-                id="last_name"
-                value={isEditing ? formData.last_name || '' : profile?.last_name || ''}
-                onChange={(e) => handleInputChange('last_name', e.target.value)}
+                id="full_name"
+                value={isEditing ? formData.full_name || '' : profile?.full_name || ''}
+                onChange={(e) => handleInputChange('full_name', e.target.value)}
                 disabled={!isEditing}
               />
             </div>

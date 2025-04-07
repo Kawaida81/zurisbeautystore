@@ -9,6 +9,29 @@ import { format, subDays, subMonths } from 'date-fns'
 import { LoadingSpinner } from '@/app/admin/components/loading-spinner'
 import { toast } from 'react-hot-toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js'
+import { Line } from 'react-chartjs-2'
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
 
 interface DailyProfit {
   date: string
@@ -129,20 +152,48 @@ export default function ProfitPage() {
         {
           label: 'Revenue',
           data: dailyProfits.map(item => item.total_revenue),
-          backgroundColor: 'rgba(34, 197, 94, 0.2)',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
           borderColor: 'rgb(34, 197, 94)',
-          fill: true
+          fill: true,
+          tension: 0.4
         },
         {
           label: 'Profit',
           data: dailyProfits.map(item => item.profit),
-          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
           borderColor: 'rgb(59, 130, 246)',
-          fill: true
+          fill: true,
+          tension: 0.4
         }
       ]
     }
   }
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: false
+      }
+    },
+    scales: {
+      y: {
+        type: 'linear' as const,
+        beginAtZero: true,
+        ticks: {
+          callback: function(value: number | string) {
+            if (typeof value === 'number') {
+              return `KSh ${value.toLocaleString()}`
+            }
+            return value
+          }
+        }
+      }
+    }
+  } as const
 
   const getCategoryChartData = () => {
     return {
@@ -159,6 +210,32 @@ export default function ProfitPage() {
       ]
     }
   }
+
+  const categoryChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: false
+      }
+    },
+    scales: {
+      y: {
+        type: 'linear' as const,
+        beginAtZero: true,
+        ticks: {
+          callback: function(value: number | string) {
+            if (typeof value === 'number') {
+              return `KSh ${value.toLocaleString()}`
+            }
+            return value
+          }
+        }
+      }
+    }
+  } as const
 
   const getTotalMetrics = () => {
     const revenue = dailyProfits.reduce((sum, day) => sum + day.total_revenue, 0)
@@ -292,63 +369,81 @@ export default function ProfitPage() {
 
       {/* Content */}
       {activeTab === 'overview' && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Revenue & Profit Trends</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setView('daily')}
-                  className={view === 'daily' ? 'bg-primary text-primary-foreground' : ''}
-                >
-                  Daily
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setView('monthly')}
-                  className={view === 'monthly' ? 'bg-primary text-primary-foreground' : ''}
-                >
-                  Monthly
-                </Button>
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>{view === 'daily' ? 'Daily' : 'Monthly'} Revenue & Profit</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <LoadingSpinner size={40} />
+                </div>
+              ) : (
+                <div className="h-[300px]">
+                  <Line data={getChartData()} options={chartOptions} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Revenue & Profit Trends</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setView('daily')}
+                    className={view === 'daily' ? 'bg-primary text-primary-foreground' : ''}
+                  >
+                    Daily
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setView('monthly')}
+                    className={view === 'monthly' ? 'bg-primary text-primary-foreground' : ''}
+                  >
+                    Monthly
+                  </Button>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            {loading ? (
-              <div className="flex items-center justify-center h-[300px]">
-                <LoadingSpinner size={40} />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4">Date</th>
-                      <th className="text-right py-3 px-4">Revenue</th>
-                      <th className="text-right py-3 px-4">Cost</th>
-                      <th className="text-right py-3 px-4">Profit</th>
-                      <th className="text-right py-3 px-4">Orders</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dailyProfits.map((day) => (
-                      <tr key={day.date} className="border-b">
-                        <td className="py-3 px-4">{format(new Date(day.date), view === 'daily' ? 'MMM d, yyyy' : 'MMM yyyy')}</td>
-                        <td className="text-right py-3 px-4">KSh {day.total_revenue.toLocaleString()}</td>
-                        <td className="text-right py-3 px-4">KSh {day.total_cost.toLocaleString()}</td>
-                        <td className="text-right py-3 px-4 text-green-600">KSh {day.profit.toLocaleString()}</td>
-                        <td className="text-right py-3 px-4">{day.order_count}</td>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <LoadingSpinner size={40} />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4">Date</th>
+                        <th className="text-right py-3 px-4">Revenue</th>
+                        <th className="text-right py-3 px-4">Cost</th>
+                        <th className="text-right py-3 px-4">Profit</th>
+                        <th className="text-right py-3 px-4">Orders</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </thead>
+                    <tbody>
+                      {dailyProfits.map((day) => (
+                        <tr key={day.date} className="border-b">
+                          <td className="py-3 px-4">{format(new Date(day.date), view === 'daily' ? 'MMM d, yyyy' : 'MMM yyyy')}</td>
+                          <td className="text-right py-3 px-4">KSh {day.total_revenue.toLocaleString()}</td>
+                          <td className="text-right py-3 px-4">KSh {day.total_cost.toLocaleString()}</td>
+                          <td className="text-right py-3 px-4 text-green-600">KSh {day.profit.toLocaleString()}</td>
+                          <td className="text-right py-3 px-4">{day.order_count}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === 'categories' && (

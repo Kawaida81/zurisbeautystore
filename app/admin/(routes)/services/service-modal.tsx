@@ -66,27 +66,32 @@ export function ServiceModal({
       
       if (service?.id) {
         // Update existing service
-        const { error } = await supabase.rpc('update_service', {
-          p_service_id: service.id,
-          p_name: data.name,
-          p_description: data.description,
-          p_category: data.category,
-          p_duration: data.duration,
-          p_price: data.price,
-          p_is_active: data.is_active
-        });
+        const { error } = await supabase
+          .from('services')
+          .update({
+            name: data.name,
+            description: data.description,
+            category: data.category,
+            duration: data.duration,
+            price: data.price,
+            is_active: data.is_active,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', service.id);
         
         if (error) throw error;
       } else {
         // Create new service
-        const { error } = await supabase.rpc('create_service', {
-          p_name: data.name,
-          p_description: data.description,
-          p_category: data.category,
-          p_duration: data.duration,
-          p_price: data.price,
-          p_is_active: data.is_active
-        });
+        const { error } = await supabase
+          .from('services')
+          .insert([{
+            name: data.name,
+            description: data.description,
+            category: data.category,
+            duration: data.duration,
+            price: data.price,
+            is_active: data.is_active
+          }]);
         
         if (error) throw error;
       }

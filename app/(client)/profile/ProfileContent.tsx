@@ -19,32 +19,32 @@ interface ClientProfile {
   total_visits: number
   total_spent: number
   loyalty_points: number
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
 }
 
 interface UserProfile {
   id: string
   email: string
-  full_name: string
+  full_name: string | null
   phone: string | null
   role: 'client' | 'worker' | 'admin'
   is_active: boolean
-  created_at: string
+  created_at: string | null
 }
 
 interface CompleteProfile {
   id: string
   email: string
-  full_name: string
+  full_name: string | null
   phone: string | null
   role: 'client' | 'worker' | 'admin'
   is_active: boolean
-  created_at: string
+  created_at: string | null
   client_profile: ClientProfile
   preferred_worker: {
     id: string
-    full_name: string
+    full_name: string | null
     email: string
   } | null
   upcoming_appointments: Array<any>
@@ -55,107 +55,173 @@ interface ProfileResponse {
   profile: CompleteProfile
 }
 
+interface EditableProfile {
+  full_name: string | null
+  phone: string | null
+}
+
 export default function ProfileContent() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<CompleteProfile | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [editedProfile, setEditedProfile] = useState<Partial<ClientProfile>>({})
+  const [editedProfile, setEditedProfile] = useState<EditableProfile>({
+    full_name: null,
+    phone: null
+  })
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const supabase = createClient()
-        
-        // Get current user
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        if (userError) {
-          console.error('Auth error:', userError)
-          throw new Error('Authentication error: ' + userError.message)
-        }
-        if (!user) {
-          throw new Error('No authenticated user found')
-        }
-
-        // Get client profile
-        const { data: rpcResponse, error: profileError } = await supabase
-          .rpc('get_client_profile', {
-            p_client_id: user.id
-          })
-
-        if (profileError) {
-          console.error('Profile fetch error:', JSON.stringify(profileError))
-          throw new Error('Failed to fetch profile: ' + (profileError.message || 'Unknown error'))
-        }
-
-        // Debug logging
-        console.log('Raw RPC response:', rpcResponse)
-
-        // Handle empty response
-        if (!rpcResponse || (Array.isArray(rpcResponse) && rpcResponse.length === 0)) {
-          // Try to create a new profile
-          const { error: createError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              preferred_contact: 'email',
-              total_visits: 0,
-              total_spent: 0,
-              loyalty_points: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-
-          if (createError) {
-            console.error('Error creating profile:', createError)
-            throw new Error('Failed to create profile')
-          }
-
-          // Retry fetching the profile
-          const { data: retryResponse, error: retryError } = await supabase
-            .rpc('get_client_profile', {
-              p_client_id: user.id
-            })
-
-          if (retryError) {
-            throw new Error('Failed to fetch profile after creation')
-          }
-
-          const retryData = retryResponse as ProfileResponse
-          if (!retryData?.profile) {
-            throw new Error('Invalid profile data structure after creation')
-          }
-
-          // Set the profile data
-          setProfile(retryData.profile)
-          setEditedProfile(retryData.profile.client_profile)
-          return
-        }
-
-        const data = rpcResponse as ProfileResponse
-        if (!data?.profile || typeof data.profile !== 'object') {
-          console.error('Invalid profile data structure:', data)
-          throw new Error('Invalid profile data structure')
-        }
-
-        // Set the profile data
-        setProfile(data.profile)
-        setEditedProfile(data.profile.client_profile)
-      } catch (err) {
-        console.error('Error fetching profile:', err)
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setLoading(false)
+  const fetchProfile = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const supabase = createClient()
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) {
+        console.error('Auth error:', userError)
+        throw new Error('Authentication error: ' + userError.message)
       }
-    }
+      if (!user) {
+        throw new Error('No authenticated user found')
+      }
 
+      // Get user profile
+      const { data: userData, error: userProfileError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          email,
+          full_name,
+          phone,
+          role,
+          is_active,
+          created_at
+        `)
+        .eq('id', user.id)
+        .single()
+
+      if (userProfileError) {
+        console.error('Profile fetch error:', JSON.stringify(userProfileError))
+        throw new Error('Failed to fetch profile: ' + (userProfileError.message || 'Unknown error'))
+      }
+
+      // Handle empty response
+      if (!userData) {
+        throw new Error('User profile not found')
+      }
+
+      // Get upcoming appointments
+      const { data: upcomingAppointments, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          service,
+          service_name,
+          appointment_date,
+          time,
+          status,
+          total_amount
+        `)
+        .eq('client_id', user.id)
+        .eq('status', 'pending')
+        .order('appointment_date', { ascending: true })
+        .limit(5)
+
+      if (appointmentsError) {
+        console.error('Appointments fetch error:', appointmentsError)
+      }
+
+      // Get recent services (completed appointments)
+      const { data: recentServices, error: servicesError } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          service,
+          service_name,
+          appointment_date,
+          time,
+          status,
+          total_amount
+        `)
+        .eq('client_id', user.id)
+        .eq('status', 'completed')
+        .order('appointment_date', { ascending: false })
+        .limit(5)
+
+      if (servicesError) {
+        console.error('Services fetch error:', servicesError)
+      }
+
+      // Calculate client stats from appointments
+      const { data: allAppointments, error: allAppointmentsError } = await supabase
+        .from('appointments')
+        .select('status, total_amount, appointment_date')
+        .eq('client_id', user.id)
+
+      if (allAppointmentsError) {
+        console.error('Error fetching all appointments:', allAppointmentsError)
+      }
+
+      const stats = {
+        total_visits: allAppointments?.filter(a => a.status === 'completed').length || 0,
+        total_spent: allAppointments?.reduce((sum, a) => sum + (a.total_amount || 0), 0) || 0,
+        loyalty_points: Math.floor((allAppointments?.reduce((sum, a) => sum + (a.total_amount || 0), 0) || 0) / 10) // 1 point per $10 spent
+      }
+
+      // Construct complete profile
+      const completeProfile: CompleteProfile = {
+        id: userData.id,
+        email: userData.email,
+        full_name: userData.full_name,
+        phone: userData.phone,
+        role: userData.role as 'client' | 'worker' | 'admin',
+        is_active: userData.is_active || false,
+        created_at: userData.created_at || null,
+        client_profile: {
+          id: userData.id,
+          preferred_contact: 'email',
+          preferred_worker_id: null,
+          last_visit_date: allAppointments?.find(a => a.status === 'completed')?.appointment_date || null,
+          total_visits: stats.total_visits,
+          total_spent: stats.total_spent,
+          loyalty_points: stats.loyalty_points,
+          created_at: userData.created_at || null,
+          updated_at: userData.created_at || null
+        },
+        preferred_worker: null,
+        upcoming_appointments: upcomingAppointments || [],
+        recent_services: recentServices || []
+      }
+
+      setProfile(completeProfile)
+      setEditedProfile({
+        full_name: completeProfile.full_name,
+        phone: completeProfile.phone
+      })
+    } catch (error) {
+      console.error('Error in fetchProfile:', error)
+      setError(error instanceof Error ? error.message : 'An unknown error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchProfile()
   }, [])
 
-  const handleInputChange = (field: keyof ClientProfile, value: any) => {
+  useEffect(() => {
+    if (profile) {
+      setEditedProfile({
+        full_name: profile.full_name,
+        phone: profile.phone
+      })
+    }
+  }, [profile])
+
+  const handleInputChange = (field: keyof EditableProfile, value: string | null) => {
     setEditedProfile(prev => ({
       ...prev,
       [field]: value
@@ -169,30 +235,28 @@ export default function ProfileContent() {
       setIsSaving(true)
       const supabase = createClient()
 
-      const { error } = await supabase
-        .from('profiles')
+      // Update user profile
+      const { error: updateError } = await supabase
+        .from('users')
         .update({
-          preferred_contact: editedProfile.preferred_contact,
-          preferred_worker_id: editedProfile.preferred_worker_id
+          full_name: editedProfile.full_name || undefined,
+          phone: editedProfile.phone || undefined
         })
         .eq('id', profile.id)
 
-      if (error) throw error
+      if (updateError) {
+        console.error('Error updating profile:', updateError)
+        toast.error('Failed to update profile')
+        return
+      }
 
-      // Update local state
-      setProfile(prev => prev ? {
-        ...prev,
-        client_profile: {
-          ...prev.client_profile,
-          ...editedProfile
-        }
-      } : null)
-
+      // Refresh profile data
+      await fetchProfile()
       setIsEditing(false)
       toast.success('Profile updated successfully')
-    } catch (err) {
-      console.error('Error updating profile:', err)
-      toast.error('Failed to update profile')
+    } catch (error) {
+      console.error('Error in handleSave:', error)
+      toast.error('An error occurred while saving')
     } finally {
       setIsSaving(false)
     }
@@ -247,7 +311,7 @@ export default function ProfileContent() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{profile.full_name}</h1>
-              <p className="text-gray-500">Member since {new Date(profile.created_at).toLocaleDateString()}</p>
+              <p className="text-gray-500">Member since {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -257,7 +321,10 @@ export default function ProfileContent() {
                   variant="outline"
                   onClick={() => {
                     setIsEditing(false)
-                    setEditedProfile(profile.client_profile)
+                    setEditedProfile({
+                      full_name: profile.full_name,
+                      phone: profile.phone
+                    })
                   }}
                   disabled={isSaving}
                 >
@@ -298,48 +365,68 @@ export default function ProfileContent() {
             <CardContent className="space-y-4">
               <div>
                 <Label>Full Name</Label>
-                <Input value={profile.full_name} disabled />
+                {isEditing ? (
+                  <Input
+                    value={editedProfile.full_name || ''}
+                    onChange={(e) => handleInputChange('full_name', e.target.value)}
+                  />
+                ) : (
+                  <p>{profile.full_name}</p>
+                )}
               </div>
               <div>
                 <Label>Email</Label>
                 <div className="flex items-center gap-2">
                   <Input value={profile.email} disabled />
-                  {editedProfile.preferred_contact === 'email' && (
+                  {editedProfile.full_name === profile.full_name && (
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
                       Preferred
                     </span>
                   )}
                 </div>
               </div>
-              <div>
-                <Label>Phone</Label>
-                <div className="flex items-center gap-2">
-                  <Input value={profile.phone || 'Not provided'} disabled />
-                  {editedProfile.preferred_contact === 'phone' && (
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                      Preferred
-                    </span>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                {isEditing ? (
+                  <Input
+                    id="phone"
+                    value={editedProfile.phone || ''}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                  />
+                ) : (
+                  <p>{profile.phone || 'Not provided'}</p>
+                )}
               </div>
-              {isEditing && (
+            </CardContent>
+          </Card>
+
+          {/* Account Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Account Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
                 <div>
-                  <Label>Preferred Contact Method</Label>
-                  <Select
-                    value={editedProfile.preferred_contact}
-                    onValueChange={(value) => handleInputChange('preferred_contact', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select preferred contact" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="phone">Phone</SelectItem>
-                      <SelectItem value="sms">SMS</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Member Since</Label>
+                  <p>{profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}</p>
                 </div>
-              )}
+                <div>
+                  <Label>Total Visits</Label>
+                  <p>{profile.client_profile.total_visits}</p>
+                </div>
+                <div>
+                  <Label>Total Spent</Label>
+                  <p>${profile.client_profile.total_spent.toFixed(2)}</p>
+                </div>
+                <div>
+                  <Label>Loyalty Points</Label>
+                  <p>{profile.client_profile.loyalty_points}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -444,10 +531,10 @@ export default function ProfileContent() {
                       <div>
                         <p className="font-semibold">{service.service_name}</p>
                         <p className="text-sm text-gray-500">
-                          {new Date(service.service_date).toLocaleDateString()}
+                          {service.appointment_date ? new Date(service.appointment_date).toLocaleDateString() : 'No date'}
                         </p>
                       </div>
-                      <p className="font-semibold">${service.price.toFixed(2)}</p>
+                      <p className="font-semibold">${service.total_amount.toFixed(2)}</p>
                     </div>
                   ))}
                 </div>

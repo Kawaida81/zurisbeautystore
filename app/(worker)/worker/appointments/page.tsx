@@ -566,11 +566,12 @@ export default function WorkerAppointments() {
 
         // Get active clients (clients with appointments this month)
         const { count: activeClientsCount } = await supabase
-          .rpc('count_active_clients', {
-            worker_id: user.id,
-            start_date: monthStart.toISOString(),
-            end_date: tomorrow.toISOString()
-          });
+          .from('appointments')
+          .select('client_id', { count: 'exact', head: true })
+          .eq('worker_id', user.id)
+          .gte('appointment_date', monthStart.toISOString())
+          .lt('appointment_date', tomorrow.toISOString())
+          .not('client_id', 'is', null);
 
         // Get pending appointments count
         const { count: pendingCount } = await supabase

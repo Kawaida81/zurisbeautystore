@@ -9,36 +9,64 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { getNotifications, markNotificationAsRead, getUnreadNotificationsCount, subscribeToNotifications } from '@/lib/queries/notifications'
+import {
+  getNotifications,
+  getUnreadCount as getUnreadNotificationsCount,
+  markAsRead as markNotificationAsRead,
+  subscribeToNotifications
+} from '@/lib/queries/notifications'
 import type { Notification } from '@/lib/queries/notifications'
 import { useSupabase } from '@/components/providers/supabase-provider'
+import { createClient } from '@/lib/supabase/client'
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const { user } = useSupabase()
+  const supabase = createClient()
 
   useEffect(() => {
-    if (user) {
-      // Load initial notifications
-      loadNotifications()
-      // Load unread count
-      loadUnreadCount()
-      
-      // Subscribe to new notifications
-      const unsubscribe = subscribeToNotifications((newNotification) => {
-        // Only add notification if it's for the current user
-        if (newNotification.user_id === user.id) {
-          setNotifications(prev => [newNotification, ...prev])
-          setUnreadCount(prev => prev + 1)
-        }
-      })
+    let unsubscribe: (() => void) | undefined;
 
-      return () => {
-        unsubscribe()
+    const initializeNotifications = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        // Load initial notifications
+        await loadNotifications()
+        // Load unread count
+        await loadUnreadCount()
+        
+        // Subscribe to new notifications
+        unsubscribe = await subscribeToNotifications((newNotification) => {
+          // Only add notification if it's for the current user
+          if (newNotification.user_id === user?.id) {
+            setNotifications(prev => [newNotification, ...prev])
+            setUnreadCount(prev => prev + 1)
+          }
+        })
+
+        return () => {
+          if (unsubscribe) {
+            unsubscribe();
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing notifications:', error)
       }
+    };
+
+    if (user) {
+      initializeNotifications();
     }
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [user])
 
   const loadNotifications = async () => {
@@ -49,18 +77,16 @@ export default function NotificationBell() {
   }
 
   const loadUnreadCount = async () => {
-    const { count = 0 } = await getUnreadNotificationsCount()
+    const count = await getUnreadNotificationsCount()
     setUnreadCount(count)
   }
 
   const handleMarkAsRead = async (notificationId: string) => {
-    const { success } = await markNotificationAsRead(notificationId)
+    const success = await markNotificationAsRead(notificationId)
     if (success) {
       setNotifications(prev =>
-        prev.map(notification =>
-          notification.id === notificationId
-            ? { ...notification, status: 'read' as const }
-            : notification
+        prev.map(n =>
+          n.id === notificationId ? { ...n, status: 'read' } : n
         )
       )
       setUnreadCount(prev => Math.max(0, prev - 1))

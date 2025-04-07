@@ -55,7 +55,7 @@ import {
   getProducts,
   createProduct,
   updateProduct,
-  updateStock,
+  updateStockQuantity as updateStock,
   getCategories,
   createCategory
 } from '@/lib/queries/inventory'
@@ -185,14 +185,13 @@ export default function WorkerInventory() {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await getCategories()
-      if (error) throw error
-      setCategories(data)
+      const categories = await getCategories()
+      setCategories(categories)
     } catch (error) {
       console.error('Error fetching categories:', error)
       toast({
-        title: "Error fetching categories",
-        description: error instanceof Error ? error.message : "Could not fetch categories",
+        title: "Error",
+        description: "Could not fetch categories. Please try again.",
         variant: "destructive",
       })
     }
@@ -440,16 +439,9 @@ export default function WorkerInventory() {
     }
   }
 
-  const updateStockQuantity = async (productId: string, newQuantity: number) => {
+  const handleStockUpdate = async (productId: string, newQuantity: number) => {
     try {
-      const stockUpdate: StockUpdate = {
-        product_id: productId,
-        quantity: newQuantity,
-        type: 'set'
-      }
-
-      const { error } = await updateStock(stockUpdate)
-      if (error) throw error
+      await updateStock(productId, newQuantity, 'Manual stock update')
 
       toast({
         title: "Success",

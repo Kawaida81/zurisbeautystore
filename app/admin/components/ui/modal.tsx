@@ -10,13 +10,14 @@ import {
   DialogTitle,
 } from './dialog'
 import { Button } from './button'
-import { LoadingSpinner } from '../loading-spinner'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { X } from 'lucide-react'
 
 interface ModalProps {
-  title: string
+  title?: string
   description?: string
   isOpen: boolean
+  open?: boolean
   onClose: () => void
   children?: React.ReactNode
   footer?: React.ReactNode
@@ -27,6 +28,7 @@ export function Modal({
   title,
   description,
   isOpen,
+  open = isOpen,
   onClose,
   children,
   footer,
@@ -43,11 +45,11 @@ export function Modal({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px] md:max-w-[600px] lg:max-w-[700px]">
         <DialogHeader className="space-y-4">
           <div className="flex items-center justify-between">
-            <DialogTitle>{title}</DialogTitle>
+            {title && <DialogTitle>{title}</DialogTitle>}
             <Button
               variant="ghost"
               size="icon"

@@ -8,12 +8,14 @@ type SupabaseContextType = {
   user: User | null
   loading: boolean
   error: Error | null
+  isInitialized: boolean
 }
 
 const SupabaseContext = createContext<SupabaseContextType>({
   user: null,
   loading: true,
   error: null,
+  isInitialized: false
 })
 
 export const useSupabase = () => {
@@ -28,20 +30,36 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
 
     // Check active session
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          throw sessionError
+        }
+
+        setUser(session?.user ?? null)
+      } catch (e) {
+        setError(e as Error)
+        console.error('Error initializing auth:', e)
+      } finally {
+        setLoading(false)
+        setIsInitialized(true)
+      }
+    }
+
+    initializeAuth()
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
@@ -55,6 +73,12 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     error,
+    isInitialized
+  }
+
+  // Show nothing until auth is initialized
+  if (!isInitialized) {
+    return null
   }
 
   return (
@@ -62,4 +86,4 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       {children}
     </SupabaseContext.Provider>
   )
-} 
+}

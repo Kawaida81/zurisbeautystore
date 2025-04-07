@@ -63,24 +63,33 @@ export function CustomerModal({
       setLoading(true);
       
       if (customer?.id) {
-        const { error } = await supabase.rpc('update_customer', {
-          p_customer_id: customer.id,
-          p_first_name: data.first_name,
-          p_last_name: data.last_name,
-          p_email: data.email,
-          p_phone: data.phone,
-          p_address: data.address
-        });
+        const { error } = await supabase
+          .from('users')
+          .update({
+            first_name: data.first_name,
+            last_name: data.last_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', customer.id);
         
         if (error) throw error;
       } else {
-        const { error } = await supabase.rpc('create_customer', {
-          p_first_name: data.first_name,
-          p_last_name: data.last_name,
-          p_email: data.email,
-          p_phone: data.phone,
-          p_address: data.address
-        });
+        const { error } = await supabase
+          .from('users')
+          .insert([{
+            first_name: data.first_name,
+            last_name: data.last_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            role: 'client',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
         
         if (error) throw error;
       }

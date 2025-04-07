@@ -19,9 +19,12 @@ import {
 } from '@/components/ui/form'
 import type { SignInInput } from '@/lib/validations/auth'
 import { signInSchema } from '@/lib/validations/auth'
+import type { UserRole } from '@/lib/types/database'
 
-// Helper function to wait for a specified time
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+type UserProfileResponse = {
+  role: UserRole
+  is_active: boolean
+}
 
 export default function SignInPage() {
   const router = useRouter()
@@ -62,17 +65,23 @@ export default function SignInPage() {
         throw new Error(signInError?.message || 'Authentication failed')
       }
 
-      // Step 2: Get user role and profile using the RPC function
-      const { data: userProfile, error: profileError } = await supabase.rpc(
-        'get_user_role_and_profile',
-        { user_id: authData.user.id }
-      )
+      // Step 2: Get user role and active status directly from users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, is_active')
+        .eq('id', authData.user.id)
+        .single()
 
-      if (profileError || !userProfile) {
+      if (userError || !userData) {
         throw new Error('Failed to fetch user profile')
       }
 
-      if (!userProfile.profile.is_active) {
+      const userProfile: UserProfileResponse = {
+        role: userData.role as UserRole,
+        is_active: userData.is_active ?? false
+      }
+
+      if (!userProfile.is_active) {
         throw new Error('Your account is currently inactive. Please contact support.')
       }
 
@@ -208,4 +217,4 @@ export default function SignInPage() {
       </div>
     </div>
   )
-} 
+}

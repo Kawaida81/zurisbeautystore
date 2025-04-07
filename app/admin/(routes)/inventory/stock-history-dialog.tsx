@@ -1,13 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../components/ui/select';
-import { Button } from '../../components/ui/button';
+import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import type { InventoryItem, StockAdjustment } from '@/lib/types/inventory';
-import { getStockHistory } from '@/lib/queries/inventory';
-import { LoadingSpinner } from '../../components/loading-spinner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import type { InventoryItem } from '@/lib/types/inventory';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+
+interface StockHistoryEntry {
+  id: string;
+  product_id: string;
+  quantity: number;
+  type: 'add' | 'remove' | 'set';
+  notes?: string;
+  created_at: string;
+  created_by: string;
+}
 
 interface StockHistoryDialogProps {
   open: boolean;
@@ -20,110 +34,70 @@ export function StockHistoryDialog({
   onClose,
   selectedProduct
 }: StockHistoryDialogProps) {
-  const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<StockAdjustment[]>([]);
-  const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
-
-  useEffect(() => {
-    if (open && selectedProduct) {
-      fetchHistory();
-    }
-  }, [open, selectedProduct, dateRange]);
-
-  const fetchHistory = async () => {
-    if (!selectedProduct) return;
-
-    try {
-      setLoading(true);
-      const endDate = new Date();
-      const startDate = new Date();
-      
-      switch (dateRange) {
-        case '7d':
-          startDate.setDate(startDate.getDate() - 7);
-          break;
-        case '30d':
-          startDate.setDate(startDate.getDate() - 30);
-          break;
-        case '90d':
-          startDate.setDate(startDate.getDate() - 90);
-          break;
+  const { data: history, isLoading } = useQuery({
+    queryKey: ['stock-history', selectedProduct?.id],
+    queryFn: async () => {
+      if (!selectedProduct) return [];
+      const response = await fetch(`/api/inventory/history/${selectedProduct.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch stock history');
       }
-
-      const { data, error } = await getStockHistory(
-        selectedProduct.id,
-        startDate,
-        endDate
-      );
-
-      if (error) throw error;
-      setHistory(data);
-    } catch (error) {
-      console.error('Error fetching stock history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return response.json() as Promise<StockHistoryEntry[]>;
+    },
+    enabled: !!selectedProduct,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Stock History</DialogTitle>
+          <DialogTitle>Stock History - {selectedProduct?.name}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm text-muted-foreground">
-            {selectedProduct ? selectedProduct.name : 'Select a product'}
-          </div>
-          <Select value={dateRange} onValueChange={(value: any) => setDateRange(value)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-48">
             <LoadingSpinner size={40} />
           </div>
-        ) : history.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
-            No stock adjustments found for this period
-          </div>
         ) : (
-          <div className="space-y-4">
-            {history.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start justify-between p-4 rounded-lg border"
-              >
-                <div className="space-y-1">
-                  <div className="font-medium">
-                    {item.adjustment_type === 'add' ? 'Added' : 
-                     item.adjustment_type === 'remove' ? 'Removed' : 
-                     'Set to'} {item.adjustment_quantity} units
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Previous: {item.previous_quantity} → New: {item.new_quantity}
-                  </div>
-                  {item.notes && (
-                    <div className="text-sm text-muted-foreground mt-2">
-                      Note: {item.notes}
+          <ScrollArea className="h-[400px] pr-4">
+            <div className="space-y-4">
+              {history?.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-start justify-between border-b pb-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={entry.type === 'remove' ? 'destructive' : 'default'}>
+                        {entry.type === 'add' && '+'}
+                        {entry.type === 'remove' && '-'}
+                        {entry.quantity}
+                      </Badge>
+                      <span className="text-sm font-medium">
+                        {entry.type === 'set' ? 'Set to' : entry.type === 'add' ? 'Added' : 'Removed'}
+                      </span>
                     </div>
-                  )}
+                    {entry.notes && (
+                      <p className="text-sm text-muted-foreground">{entry.notes}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(entry.created_at), 'MMM d, yyyy h:mm a')}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      by {entry.created_by}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  {format(new Date(item.created_at), 'MMM d, yyyy h:mm a')}
+              ))}
+              {history?.length === 0 && (
+                <div className="text-center text-muted-foreground py-8">
+                  No history available
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          </ScrollArea>
         )}
       </DialogContent>
     </Dialog>

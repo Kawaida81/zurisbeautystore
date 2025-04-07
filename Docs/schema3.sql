@@ -857,32 +857,58 @@ $$;
 ALTER FUNCTION "public"."get_customer"("p_customer_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_daily_profits"("p_start_date" "date" DEFAULT (CURRENT_DATE - '30 days'::interval), "p_end_date" "date" DEFAULT CURRENT_DATE) RETURNS TABLE("date" "date", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" integer, "average_order_value" numeric)
+CREATE OR REPLACE FUNCTION "public"."get_daily_profits"("p_start_date" "date", "p_end_date" "date") RETURNS TABLE("date" "date", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" bigint, "average_order_value" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
-  RETURN QUERY
-  WITH daily_stats AS (
+    RETURN QUERY
+    WITH daily_sales AS (
+        SELECT
+            DATE(s.created_at) as sale_date,
+            SUM(s.total_amount) as revenue,
+            COUNT(*) as num_orders
+        FROM sales s
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE(s.created_at)
+    ),
+    daily_product_costs AS (
+        SELECT
+            DATE(s.created_at) as sale_date,
+            SUM(si.quantity * p.cost_price) as product_cost
+        FROM sales s
+        JOIN sale_items si ON s.id = si.sale_id
+        JOIN products p ON si.product_id = p.id
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE(s.created_at)
+    ),
+    daily_service_costs AS (
+        SELECT
+            DATE(s.created_at) as sale_date,
+            -- Assuming 60% of service price is profit, 40% is cost
+            SUM((service->>'price')::numeric * 0.4) as service_cost
+        FROM sales s,
+        jsonb_array_elements(s.services) as service
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE(s.created_at)
+    )
     SELECT
-      DATE(o.created_at) as date,
-      SUM(o.total_amount) as total_revenue,
-      COUNT(*) as order_count,
-      SUM(o.total_amount) / COUNT(*) as average_order_value,
-      -- Assuming a 30% cost on products and services
-      SUM(o.total_amount) * 0.7 as total_cost
-    FROM orders o
-    WHERE DATE(o.created_at) BETWEEN p_start_date AND p_end_date
-    GROUP BY DATE(o.created_at)
-  )
-  SELECT
-    ds.date,
-    ds.total_revenue,
-    ds.total_cost,
-    (ds.total_revenue - ds.total_cost) as profit,
-    ds.order_count,
-    ds.average_order_value
-  FROM daily_stats ds
-  ORDER BY ds.date DESC;
+        ds.sale_date as date,
+        COALESCE(ds.revenue, 0) as total_revenue,
+        COALESCE(dpc.product_cost, 0) + COALESCE(dsc.service_cost, 0) as total_cost,
+        COALESCE(ds.revenue, 0) - (COALESCE(dpc.product_cost, 0) + COALESCE(dsc.service_cost, 0)) as profit,
+        COALESCE(ds.num_orders, 0) as order_count,
+        CASE
+            WHEN COALESCE(ds.num_orders, 0) = 0 THEN 0
+            ELSE ROUND(COALESCE(ds.revenue, 0) / ds.num_orders, 2)
+        END as average_order_value
+    FROM daily_sales ds
+    LEFT JOIN daily_product_costs dpc ON ds.sale_date = dpc.sale_date
+    LEFT JOIN daily_service_costs dsc ON ds.sale_date = dsc.sale_date
+    ORDER BY ds.sale_date DESC;
 END;
 $$;
 
@@ -890,52 +916,56 @@ $$;
 ALTER FUNCTION "public"."get_daily_profits"("p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_inventory_items"("p_category_id" "uuid" DEFAULT NULL::"uuid", "p_status" "text" DEFAULT NULL::"text", "p_search" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_limit" integer DEFAULT 10) RETURNS TABLE("id" "uuid", "name" "text", "description" "text", "category_id" "uuid", "category_name" "text", "price" numeric, "stock_quantity" integer, "reorder_point" integer, "status" "text", "last_restock_date" timestamp with time zone, "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."get_inventory_items"("p_category_id" "uuid" DEFAULT NULL::"uuid", "p_status" "text" DEFAULT NULL::"text", "p_search" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_limit" integer DEFAULT 10) RETURNS TABLE("id" "uuid", "name" "text", "description" "text", "category_id" "uuid", "category_name" "text", "price" numeric, "stock_quantity" integer, "reorder_point" integer, "status" "text", "created_at" timestamp with time zone, "total_count" bigint)
+    LANGUAGE "plpgsql"
     AS $$
+DECLARE
+  v_offset INTEGER;
 BEGIN
+  -- Calculate offset
+  v_offset := (p_page - 1) * p_limit;
+
   RETURN QUERY
-  WITH inventory AS (
+  WITH filtered_products AS (
     SELECT
       p.id,
       p.name,
       p.description,
       p.category_id,
-      pc.name as category_name,
+      c.name as category_name,
       p.price,
       p.stock_quantity,
       p.reorder_point,
       CASE
-        WHEN p.stock_quantity = 0 THEN 'out_of_stock'
+        WHEN p.stock_quantity <= 0 THEN 'out_of_stock'
         WHEN p.stock_quantity <= p.reorder_point THEN 'low_stock'
         ELSE 'in_stock'
       END as status,
-      p.last_restock_date,
+      p.created_at,
       COUNT(*) OVER() as total_count
     FROM products p
-    LEFT JOIN product_categories pc ON p.category_id = pc.id
+    LEFT JOIN product_categories c ON p.category_id = c.id
     WHERE
-      (p_category_id IS NULL OR p.category_id = p_category_id) AND
+      (p_category_id IS NULL OR p.category_id = p_category_id)
+      AND
       (p_status IS NULL OR
         CASE
-          WHEN p.stock_quantity = 0 THEN 'out_of_stock'
-          WHEN p.stock_quantity <= p.reorder_point THEN 'low_stock'
-          ELSE 'in_stock'
-        END = p_status) AND
+          WHEN p_status = 'out_of_stock' THEN p.stock_quantity <= 0
+          WHEN p_status = 'low_stock' THEN p.stock_quantity <= p.reorder_point AND p.stock_quantity > 0
+          WHEN p_status = 'in_stock' THEN p.stock_quantity > p.reorder_point
+        END
+      )
+      AND
       (p_search IS NULL OR
         p.name ILIKE '%' || p_search || '%' OR
-        p.description ILIKE '%' || p_search || '%')
-    ORDER BY
-      CASE
-        WHEN p.stock_quantity <= p.reorder_point THEN 0
-        ELSE 1
-      END,
-      p.name ASC
+        p.description ILIKE '%' || p_search || '%'
+      )
   )
   SELECT *
-  FROM inventory
+  FROM filtered_products
+  ORDER BY name ASC
   LIMIT p_limit
-  OFFSET (p_page - 1) * p_limit;
+  OFFSET v_offset;
 END;
 $$;
 
@@ -976,32 +1006,58 @@ $$;
 ALTER FUNCTION "public"."get_low_stock_alerts"("p_category_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_monthly_profits"("p_start_date" "date" DEFAULT (CURRENT_DATE - '1 year'::interval), "p_end_date" "date" DEFAULT CURRENT_DATE) RETURNS TABLE("month" "date", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" integer, "average_order_value" numeric)
+CREATE OR REPLACE FUNCTION "public"."get_monthly_profits"("p_start_date" "date", "p_end_date" "date") RETURNS TABLE("date" "date", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" bigint, "average_order_value" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
-  RETURN QUERY
-  WITH monthly_stats AS (
+    RETURN QUERY
+    WITH monthly_sales AS (
+        SELECT
+            DATE_TRUNC('month', s.created_at)::date as sale_month,
+            SUM(s.total_amount) as revenue,
+            COUNT(*) as num_orders
+        FROM sales s
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE_TRUNC('month', s.created_at)::date
+    ),
+    monthly_product_costs AS (
+        SELECT
+            DATE_TRUNC('month', s.created_at)::date as sale_month,
+            SUM(si.quantity * p.cost_price) as product_cost
+        FROM sales s
+        JOIN sale_items si ON s.id = si.sale_id
+        JOIN products p ON si.product_id = p.id
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE_TRUNC('month', s.created_at)::date
+    ),
+    monthly_service_costs AS (
+        SELECT
+            DATE_TRUNC('month', s.created_at)::date as sale_month,
+            -- Assuming 60% of service price is profit, 40% is cost
+            SUM((service->>'price')::numeric * 0.4) as service_cost
+        FROM sales s,
+        jsonb_array_elements(s.services) as service
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY DATE_TRUNC('month', s.created_at)::date
+    )
     SELECT
-      DATE_TRUNC('month', o.created_at)::DATE as month,
-      SUM(o.total_amount) as total_revenue,
-      COUNT(*) as order_count,
-      SUM(o.total_amount) / COUNT(*) as average_order_value,
-      -- Assuming a 30% cost on products and services
-      SUM(o.total_amount) * 0.7 as total_cost
-    FROM orders o
-    WHERE DATE(o.created_at) BETWEEN p_start_date AND p_end_date
-    GROUP BY DATE_TRUNC('month', o.created_at)::DATE
-  )
-  SELECT
-    ms.month,
-    ms.total_revenue,
-    ms.total_cost,
-    (ms.total_revenue - ms.total_cost) as profit,
-    ms.order_count,
-    ms.average_order_value
-  FROM monthly_stats ms
-  ORDER BY ms.month DESC;
+        ms.sale_month as date,
+        COALESCE(ms.revenue, 0) as total_revenue,
+        COALESCE(mpc.product_cost, 0) + COALESCE(msc.service_cost, 0) as total_cost,
+        COALESCE(ms.revenue, 0) - (COALESCE(mpc.product_cost, 0) + COALESCE(msc.service_cost, 0)) as profit,
+        COALESCE(ms.num_orders, 0) as order_count,
+        CASE
+            WHEN COALESCE(ms.num_orders, 0) = 0 THEN 0
+            ELSE ROUND(COALESCE(ms.revenue, 0) / ms.num_orders, 2)
+        END as average_order_value
+    FROM monthly_sales ms
+    LEFT JOIN monthly_product_costs mpc ON ms.sale_month = mpc.sale_month
+    LEFT JOIN monthly_service_costs msc ON ms.sale_month = msc.sale_month
+    ORDER BY ms.sale_month DESC;
 END;
 $$;
 
@@ -1059,40 +1115,55 @@ $$;
 ALTER FUNCTION "public"."get_product_details"("p_product_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_profit_by_category"("p_start_date" "date" DEFAULT (CURRENT_DATE - '30 days'::interval), "p_end_date" "date" DEFAULT CURRENT_DATE) RETURNS TABLE("category" "text", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" integer, "average_order_value" numeric)
+CREATE OR REPLACE FUNCTION "public"."get_profit_by_category"("p_start_date" "date", "p_end_date" "date") RETURNS TABLE("category" "text", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "order_count" bigint, "average_order_value" numeric)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
-  RETURN QUERY
-  WITH category_stats AS (
+    RETURN QUERY
+    WITH product_sales AS (
+        SELECT
+            p.category,
+            SUM(si.total_price) as revenue,
+            SUM(si.quantity * p.cost_price) as cost,
+            COUNT(DISTINCT s.id) as num_orders
+        FROM sales s
+        JOIN sale_items si ON s.id = si.sale_id
+        JOIN products p ON si.product_id = p.id
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY p.category
+    ),
+    service_sales AS (
+        SELECT
+            service->>'category' as category,
+            SUM((service->>'price')::numeric) as revenue,
+            SUM((service->>'price')::numeric * 0.4) as cost,
+            COUNT(DISTINCT s.id) as num_orders
+        FROM sales s,
+        jsonb_array_elements(s.services) as service
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY service->>'category'
+    )
     SELECT
-      CASE
-        WHEN oi.product_id IS NOT NULL THEN 'Products'
-        WHEN oi.service_id IS NOT NULL THEN 'Services'
-      END as category,
-      SUM(oi.quantity * oi.unit_price) as total_revenue,
-      COUNT(DISTINCT o.id) as order_count,
-      SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.id) as average_order_value,
-      -- Assuming a 30% cost on products and services
-      SUM(oi.quantity * oi.unit_price) * 0.7 as total_cost
-    FROM orders o
-    JOIN order_items oi ON o.id = oi.order_id
-    WHERE DATE(o.created_at) BETWEEN p_start_date AND p_end_date
-    GROUP BY
-      CASE
-        WHEN oi.product_id IS NOT NULL THEN 'Products'
-        WHEN oi.service_id IS NOT NULL THEN 'Services'
-      END
-  )
-  SELECT
-    cs.category,
-    cs.total_revenue,
-    cs.total_cost,
-    (cs.total_revenue - cs.total_cost) as profit,
-    cs.order_count,
-    cs.average_order_value
-  FROM category_stats cs
-  ORDER BY cs.total_revenue DESC;
+        COALESCE(ps.category, ss.category) as category,
+        COALESCE(ps.revenue, 0) + COALESCE(ss.revenue, 0) as total_revenue,
+        COALESCE(ps.cost, 0) + COALESCE(ss.cost, 0) as total_cost,
+        (COALESCE(ps.revenue, 0) + COALESCE(ss.revenue, 0)) -
+        (COALESCE(ps.cost, 0) + COALESCE(ss.cost, 0)) as profit,
+        COALESCE(ps.num_orders, 0) + COALESCE(ss.num_orders, 0) as order_count,
+        CASE
+            WHEN (COALESCE(ps.num_orders, 0) + COALESCE(ss.num_orders, 0)) = 0 THEN 0
+            ELSE ROUND(
+                (COALESCE(ps.revenue, 0) + COALESCE(ss.revenue, 0)) /
+                (COALESCE(ps.num_orders, 0) + COALESCE(ss.num_orders, 0)),
+                2
+            )
+        END as average_order_value
+    FROM product_sales ps
+    FULL OUTER JOIN service_sales ss ON ps.category = ss.category
+    ORDER BY profit DESC;
 END;
 $$;
 
@@ -1135,46 +1206,57 @@ $$;
 ALTER FUNCTION "public"."get_stock_history"("p_product_id" "uuid", "p_start_date" timestamp with time zone, "p_end_date" timestamp with time zone, "p_page" integer, "p_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_top_performing_items"("p_start_date" "date" DEFAULT (CURRENT_DATE - '30 days'::interval), "p_end_date" "date" DEFAULT CURRENT_DATE, "p_limit" integer DEFAULT 10) RETURNS TABLE("item_id" "uuid", "item_name" "text", "item_type" "text", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "units_sold" integer)
+CREATE OR REPLACE FUNCTION "public"."get_top_performing_items"("p_start_date" "date", "p_end_date" "date", "p_limit" integer DEFAULT 10) RETURNS TABLE("item_id" "text", "item_name" "text", "item_type" "text", "total_revenue" numeric, "total_cost" numeric, "profit" numeric, "units_sold" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
     AS $$
 BEGIN
-  RETURN QUERY
-  WITH item_stats AS (
+    RETURN QUERY
+    WITH product_performance AS (
+        SELECT
+            p.id::text as item_id,
+            p.name as item_name,
+            'Product'::text as item_type,
+            SUM(si.total_price) as total_revenue,
+            SUM(si.quantity * p.cost_price) as total_cost,
+            SUM(si.quantity) as units_sold
+        FROM sales s
+        JOIN sale_items si ON s.id = si.sale_id
+        JOIN products p ON si.product_id = p.id
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY p.id, p.name
+    ),
+    service_performance AS (
+        SELECT
+            service->>'id' as item_id,
+            service->>'name' as item_name,
+            'Service'::text as item_type,
+            SUM((service->>'price')::numeric) as total_revenue,
+            SUM((service->>'price')::numeric * 0.4) as total_cost,
+            COUNT(*) as units_sold
+        FROM sales s,
+        jsonb_array_elements(s.services) as service
+        WHERE DATE(s.created_at) BETWEEN p_start_date AND p_end_date
+        AND s.payment_status = 'PAID'::public.payment_status
+        GROUP BY service->>'id', service->>'name'
+    ),
+    combined_performance AS (
+        SELECT * FROM product_performance
+        UNION ALL
+        SELECT * FROM service_performance
+    )
     SELECT
-      COALESCE(p.id, s.id) as item_id,
-      COALESCE(p.name, s.name) as item_name,
-      CASE
-        WHEN p.id IS NOT NULL THEN 'Product'
-        WHEN s.id IS NOT NULL THEN 'Service'
-      END as item_type,
-      SUM(oi.quantity * oi.unit_price) as total_revenue,
-      SUM(oi.quantity * oi.unit_price) * 0.7 as total_cost,
-      SUM(oi.quantity) as units_sold
-    FROM orders o
-    JOIN order_items oi ON o.id = oi.order_id
-    LEFT JOIN products p ON oi.product_id = p.id
-    LEFT JOIN services s ON oi.service_id = s.id
-    WHERE DATE(o.created_at) BETWEEN p_start_date AND p_end_date
-    GROUP BY
-      COALESCE(p.id, s.id),
-      COALESCE(p.name, s.name),
-      CASE
-        WHEN p.id IS NOT NULL THEN 'Product'
-        WHEN s.id IS NOT NULL THEN 'Service'
-      END
-  )
-  SELECT
-    item_id,
-    item_name,
-    item_type,
-    total_revenue,
-    total_cost,
-    (total_revenue - total_cost) as profit,
-    units_sold
-  FROM item_stats
-  ORDER BY (total_revenue - total_cost) DESC
-  LIMIT p_limit;
+        cp.item_id,
+        cp.item_name,
+        cp.item_type,
+        cp.total_revenue,
+        cp.total_cost,
+        cp.total_revenue - cp.total_cost as profit,
+        cp.units_sold
+    FROM combined_performance cp
+    ORDER BY (cp.total_revenue - cp.total_cost) DESC
+    LIMIT p_limit;
 END;
 $$;
 
@@ -1380,6 +1462,19 @@ $$;
 ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."handle_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+    NEW.updated_at = TIMEZONE('Africa/Nairobi'::text, NOW());
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."handle_updated_at"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."increment_product_stock"("p_product_id" "uuid", "p_quantity" integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -1553,6 +1648,30 @@ $$;
 
 
 ALTER FUNCTION "public"."list_products"("p_category_id" "uuid", "p_search_term" "text", "p_low_stock_only" boolean, "p_page" integer, "p_page_size" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."list_services"() RETURNS TABLE("id" "uuid", "name" "text", "description" "text", "category" "text", "duration" integer, "price" numeric, "is_active" boolean, "created_at" timestamp with time zone, "updated_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        s.id,
+        s.name,
+        s.description,
+        s.category,
+        s.duration,
+        s.price::numeric(10,2),
+        s.is_active,
+        s.created_at,
+        s.updated_at
+    FROM services s
+    ORDER BY s.name;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."list_services"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."list_services"("p_category" "text" DEFAULT NULL::"text", "p_search_term" "text" DEFAULT NULL::"text", "p_active_only" boolean DEFAULT false, "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10) RETURNS "jsonb"
@@ -2949,6 +3068,18 @@ CREATE INDEX "idx_users_fullname_search" ON "public"."users" USING "gin" ("full_
 
 
 
+CREATE INDEX "services_category_idx" ON "public"."services" USING "btree" ("category");
+
+
+
+CREATE INDEX "services_is_active_idx" ON "public"."services" USING "btree" ("is_active");
+
+
+
+CREATE INDEX "services_name_idx" ON "public"."services" USING "btree" ("name");
+
+
+
 CREATE INDEX "user_auth_cache_email_idx" ON "public"."user_auth_cache" USING "btree" ("email");
 
 
@@ -2962,6 +3093,14 @@ CREATE OR REPLACE TRIGGER "appointment_notification_trigger" AFTER INSERT OR UPD
 
 
 CREATE OR REPLACE TRIGGER "check_product_stock" AFTER UPDATE OF "stock_quantity" ON "public"."products" FOR EACH ROW WHEN (("new"."stock_quantity" <= "new"."reorder_point")) EXECUTE FUNCTION "public"."check_stock_level"();
+
+
+
+CREATE OR REPLACE TRIGGER "services_updated_at" BEFORE UPDATE ON "public"."services" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "set_services_updated_at" BEFORE UPDATE ON "public"."services" FOR EACH ROW EXECUTE FUNCTION "public"."handle_updated_at"();
 
 
 
@@ -3149,6 +3288,18 @@ CREATE POLICY "Enable read access for all users" ON "public"."products" FOR SELE
 
 
 
+CREATE POLICY "Enable read access for all users" ON "public"."services" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Enable write access for authenticated users" ON "public"."services" USING (("auth"."role"() = 'authenticated'::"text")) WITH CHECK (("auth"."role"() = 'authenticated'::"text"));
+
+
+
+CREATE POLICY "Manage services" ON "public"."services" USING (("auth"."role"() = 'admin'::"text")) WITH CHECK (("auth"."role"() = 'admin'::"text"));
+
+
+
 CREATE POLICY "Public profiles are viewable by everyone." ON "public"."profiles" FOR SELECT USING (true);
 
 
@@ -3182,6 +3333,10 @@ CREATE POLICY "Users can view own notifications" ON "public"."notifications" FOR
 
 
 CREATE POLICY "Users can view own profile" ON "public"."profiles" FOR SELECT USING (("id" = "auth"."uid"()));
+
+
+
+CREATE POLICY "View services" ON "public"."services" FOR SELECT USING (("auth"."role"() = ANY (ARRAY['admin'::"text", 'worker'::"text"])));
 
 
 
@@ -3792,6 +3947,12 @@ GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."handle_updated_at"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."increment_product_stock"("p_product_id" "uuid", "p_quantity" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."increment_product_stock"("p_product_id" "uuid", "p_quantity" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."increment_product_stock"("p_product_id" "uuid", "p_quantity" integer) TO "service_role";
@@ -3807,6 +3968,12 @@ GRANT ALL ON FUNCTION "public"."list_customers"("p_search" "text", "p_sort_by" "
 GRANT ALL ON FUNCTION "public"."list_products"("p_category_id" "uuid", "p_search_term" "text", "p_low_stock_only" boolean, "p_page" integer, "p_page_size" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."list_products"("p_category_id" "uuid", "p_search_term" "text", "p_low_stock_only" boolean, "p_page" integer, "p_page_size" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."list_products"("p_category_id" "uuid", "p_search_term" "text", "p_low_stock_only" boolean, "p_page" integer, "p_page_size" integer) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."list_services"() TO "anon";
+GRANT ALL ON FUNCTION "public"."list_services"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."list_services"() TO "service_role";
 
 
 

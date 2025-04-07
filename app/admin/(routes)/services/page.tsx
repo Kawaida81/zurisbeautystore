@@ -10,7 +10,7 @@ import { Plus } from "lucide-react";
 import { createColumns, type ServiceItem } from "@/app/admin/(routes)/services/columns";
 import { createClient } from "@/lib/supabase/client";
 import { ServiceModal } from "./service-modal";
-import { LoadingSpinner } from '@/app/admin/components/loading-spinner';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'react-hot-toast';
 
 export default function ServicesPage() {
@@ -18,15 +18,31 @@ export default function ServicesPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | undefined>();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     fetchServices();
-  }, []);
+  }, [currentPage]);
 
   const fetchServices = async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.rpc('list_services');
+      
+      // Get total count for pagination
+      const { count } = await supabase
+        .from('services')
+        .select('*', { count: 'exact', head: true });
+      
+      setTotalPages(Math.ceil((count || 0) / PAGE_SIZE));
+
+      // Get paginated data
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('name')
+        .range((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE - 1);
 
       if (error) throw error;
       setServices(data || []);
@@ -48,9 +64,10 @@ export default function ServicesPage() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.rpc('delete_service', {
-        p_service_id: service.id
-      });
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', service.id);
 
       if (error) throw error;
       await fetchServices();
@@ -64,6 +81,10 @@ export default function ServicesPage() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setSelectedService(undefined);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
@@ -98,6 +119,10 @@ export default function ServicesPage() {
                 })}
                 data={services}
                 searchKey="name"
+                pagination={true}
+                pageCount={totalPages}
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
               />
             </div>
           )}

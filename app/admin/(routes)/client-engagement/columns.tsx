@@ -3,58 +3,55 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash } from "lucide-react";
+import { Edit, Trash, ArrowUpDown } from "lucide-react";
+import { format } from "date-fns";
+
+export type MessageType = 'appointment_reminder' | 'follow_up' | 'promotion' | 'announcement';
+export type MessageStatus = 'scheduled' | 'sent' | 'failed';
 
 export interface Message {
   id: string;
-  customer: {
-    id: string;
-    full_name: string;
-  };
-  appointment?: {
-    id: string;
-    date: string;
-    time: string;
-  } | null;
-  type: 'appointment_reminder' | 'follow_up' | 'promotion' | 'announcement';
+  client_id: string;
+  appointment_id: string | null;
+  type: MessageType;
   subject: string;
   message: string;
-  status: 'scheduled' | 'sent' | 'failed';
+  status: MessageStatus;
   scheduled_for: string;
-  created_at: string;
+  client: { id: string; full_name: string | null };
+  appointment?: { id: string; appointment_date: string; time: string };
 }
 
 interface ColumnActions {
-  onEdit?: (message: Message) => void;
-  onDelete?: (message: Message) => void;
+  onEdit: (message: Message) => void;
+  onDelete: (message: Message) => void;
 }
 
 export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Message>[] => [
   {
-    accessorKey: "customer.full_name",
-    header: "Customer",
+    accessorKey: "client.full_name",
+    header: "Client",
+    cell: ({ row }) => row.original.client?.full_name || 'Unknown',
   },
   {
     accessorKey: "type",
     header: "Type",
     cell: ({ row }) => {
-      const type = row.getValue("type") as string;
-      const variants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
-        'appointment_reminder': 'default',
-        'follow_up': 'secondary',
-        'promotion': 'outline',
-        'announcement': 'secondary'
-      };
-      return (
-        <Badge variant={variants[type]}>
-          {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-        </Badge>
-      );
+      const type = row.getValue("type") as MessageType;
+      return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     },
   },
   {
     accessorKey: "subject",
-    header: "Subject",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        Subject
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
   },
   {
     accessorKey: "message",
@@ -68,7 +65,7 @@ export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Me
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string;
+      const status = row.getValue("status") as MessageStatus;
       const variants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
         'scheduled': 'outline',
         'sent': 'default',
@@ -84,34 +81,27 @@ export const createColumns = ({ onEdit, onDelete }: ColumnActions): ColumnDef<Me
   {
     accessorKey: "scheduled_for",
     header: "Scheduled For",
-    cell: ({ row }) => {
-      const date = new Date(row.getValue("scheduled_for"));
-      return date.toLocaleString();
-    },
+    cell: ({ row }) => format(new Date(row.original.scheduled_for), 'PPp'),
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const message = row.original;
-      
-      return (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onEdit?.(message)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onDelete?.(message)}
-          >
-            <Trash className="h-4 w-4" />
-          </Button>
-        </div>
-      );
-    },
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onEdit(row.original)}
+        >
+          <Edit className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(row.original)}
+        >
+          <Trash className="h-4 w-4" />
+        </Button>
+      </div>
+    ),
   },
 ];

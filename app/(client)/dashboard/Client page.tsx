@@ -68,6 +68,7 @@ interface Appointment {
   notes: string | null
   created_at: string
   updated_at: string
+  total_amount: number
 }
 
 interface User {
@@ -311,35 +312,17 @@ export default function ClientDashboard() {
   }
 
   const handleConfirmBooking = async () => {
-    if (!date || !selectedService || !user) return
+    if (!date || !selectedService || !selectedTime || !user) {
+      toast.error('Please fill in all required fields')
+      return
+    }
 
     setLoading(true)
     try {
+      // Get the service object to access its ID
       const serviceObj = services.find(s => s.name === selectedService)
-      if (!serviceObj) throw new Error('Service not found')
-
-      const appointmentDate = new Date(date)
-      const [hours, minutes] = selectedTime.split(' ')[0].split(':')
-      const isPM = selectedTime.includes('PM')
-      
-      appointmentDate.setHours(
-        isPM ? (parseInt(hours) === 12 ? 12 : parseInt(hours) + 12) : (parseInt(hours) === 12 ? 0 : parseInt(hours)),
-        parseInt(minutes)
-      )
-
-      // Check for existing appointments at the same time
-      const { data: existingAppointments, error: checkError } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('appointment_date', appointmentDate.toISOString())
-        .eq('time', selectedTime)
-        .eq('status', 'confirmed')
-
-      if (checkError) throw checkError
-
-      if (existingAppointments && existingAppointments.length > 0) {
-        toast.error('This time slot is already booked. Please select another time.')
-        return
+      if (!serviceObj) {
+        throw new Error('Selected service not found')
       }
 
       const { data, error } = await supabase
@@ -348,24 +331,25 @@ export default function ClientDashboard() {
           {
             client_id: user.id,
             service_id: serviceObj.id,
-            service: selectedService,
-            appointment_date: appointmentDate.toISOString(),
+            worker_id: null, // Will be assigned by admin/worker
+            appointment_date: date.toISOString(),
+            time: selectedTime,
             status: 'pending',
-            time: selectedTime
+            notes: null,
+            service: serviceObj.name,
+            total_amount: serviceObj.price
           }
         ])
         .select()
 
       if (error) throw error
 
-      setShowSummary(false)
-      setSelectedService('')
-      setDate(new Date())
-      setSelectedTime('09:00 AM')
       toast.success('Appointment booked successfully!')
+      setShowSummary(false)
+      fetchAppointments() // Refresh the appointments list
     } catch (error) {
       console.error('Error booking appointment:', error)
-      toast.error('Failed to book appointment')
+      toast.error('Could not book appointment. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -447,11 +431,20 @@ export default function ClientDashboard() {
       // Restore in database
       const { error: restoreError } = await supabase
         .from('appointments')
-        .insert([{
-          ...appointment,
-          created_at: undefined,
-          updated_at: undefined
-        }]);
+        .insert([
+          {
+            id: appointment.id,
+            client_id: appointment.client_id,
+            service_id: appointment.service_id,
+            worker_id: appointment.worker_id,
+            appointment_date: appointment.appointment_date,
+            time: appointment.time,
+            status: appointment.status,
+            notes: appointment.notes,
+            service: appointment.service,
+            total_amount: appointment.total_amount
+          }
+        ]);
 
       if (restoreError) throw restoreError;
 

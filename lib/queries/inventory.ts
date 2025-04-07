@@ -19,7 +19,8 @@ import type {
   StockHistoryResponse,
   StockAdjustment,
   LowStockAlertsResponse,
-  LowStockAlert
+  LowStockAlert,
+  ProductCategory
 } from '@/lib/types/inventory'
 import { Database } from '@/lib/types/database'
 
@@ -231,7 +232,7 @@ export async function getInventoryItems(
   pagination: PaginationParams = { page: 1, limit: 10 }
 ): Promise<InventoryResponse> {
   try {
-    const supabase = createClient()
+    const supabase = createClient();
     const { data, error, count } = await supabase
       .rpc('get_inventory_items', {
         p_category_id: filters.category_id,
@@ -239,123 +240,116 @@ export async function getInventoryItems(
         p_search: filters.search,
         p_page: pagination.page,
         p_limit: pagination.limit
-      })
+      });
 
-    if (error) throw error
+    if (error) throw error;
 
-    const pageCount = Math.ceil((count || 0) / pagination.limit);
     return {
-      data: {
-        items: data as unknown as InventoryItem[],
-        count: count || 0,
-        pageCount
-      },
+      data: data || [],
+      count: count || 0,
+      pageCount: Math.ceil((count || 0) / pagination.limit),
       error: null
-    }
+    };
   } catch (error) {
-    console.error('Error fetching inventory:', error)
-    return { data: { items: [], count: 0, pageCount: 0 }, error: error as Error }
+    console.error('Error fetching inventory items:', error);
+    return {
+      data: [],
+      count: 0,
+      pageCount: 0,
+      error: error as Error
+    };
   }
 }
 
-// Update product stock
-export async function updateStock(update: StockUpdate): Promise<ProductResponse> {
+export async function updateStockQuantity(
+  productId: string,
+  adjustment: number,
+  note: string
+): Promise<void> {
   try {
-    const supabase = createClient()
-    const { product_id, quantity, type, notes } = update
-
-    const { data, error } = await supabase
+    const supabase = createClient();
+    const { error } = await supabase
       .rpc('update_stock_quantity', {
-        p_product_id: product_id,
-        p_quantity: quantity,
-        p_adjustment_type: type,
-        p_notes: notes
-      })
+        p_product_id: productId,
+        p_adjustment: adjustment,
+        p_note: note
+      });
 
-    if (error) throw error
-
-    return {
-      data: data as unknown as ProductWithRelations,
-      error: null
-    }
+    if (error) throw error;
   } catch (error) {
-    console.error('Error updating stock:', error)
-    return { data: null, error: error as Error }
+    console.error('Error updating stock quantity:', error);
+    throw error;
   }
 }
 
-// Get stock adjustment history
 export async function getStockHistory(
-  productId?: string,
-  startDate: Date = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-  endDate: Date = new Date(),
-  pagination: PaginationParams = { page: 1, limit: 10 }
+  productId: string,
+  page: number = 1,
+  limit: number = 10
 ): Promise<StockHistoryResponse> {
   try {
-    const supabase = createClient()
+    const supabase = createClient();
     const { data, error, count } = await supabase
       .rpc('get_stock_history', {
         p_product_id: productId,
-        p_start_date: startDate.toISOString(),
-        p_end_date: endDate.toISOString(),
-        p_page: pagination.page,
-        p_limit: pagination.limit
-      })
+        p_page: page,
+        p_limit: limit
+      });
 
-    if (error) throw error
+    if (error) throw error;
 
     return {
-      data: data as unknown as StockAdjustment[],
+      data: data || [],
       count: count || 0,
       error: null
-    }
+    };
   } catch (error) {
-    console.error('Error fetching stock history:', error)
-    return { data: [], count: 0, error: error as Error }
-  }
-}
-
-// Get low stock alerts
-export async function getLowStockAlerts(
-  categoryId?: string
-): Promise<LowStockAlertsResponse> {
-  try {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .rpc('get_low_stock_alerts', {
-        p_category_id: categoryId
-      })
-
-    if (error) throw error
-
+    console.error('Error fetching stock history:', error);
     return {
-      data: data as unknown as LowStockAlert[],
-      error: null
-    }
-  } catch (error) {
-    console.error('Error fetching low stock alerts:', error)
-    return { data: [], error: error as Error }
+      data: [],
+      count: 0,
+      error: error as Error
+    };
   }
 }
 
-// Get all categories
-export async function getCategories(): Promise<CategoriesListResponse> {
+export async function getLowStockAlerts(): Promise<LowStockAlert[]> {
   try {
-    const supabase = createClient()
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .rpc('get_low_stock_alerts');
+
+    if (error) throw error;
+
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching low stock alerts:', error);
+    throw error;
+  }
+}
+
+export async function getCategories(): Promise<ProductCategory[]> {
+  try {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('product_categories')
       .select('*')
-      .order('name')
+      .eq('is_active', true)
+      .order('name');
 
-    if (error) throw error
+    if (error) throw error;
 
-    return {
-      data: data as Categories[],
-      error: null
-    }
+    return data.map(category => ({
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      is_active: category.is_active,
+      created_at: category.created_at || new Date().toISOString(),
+      updated_at: category.updated_at || new Date().toISOString()
+    }));
   } catch (error) {
-    console.error('Error fetching categories:', error)
-    return { data: [], error: error as Error }
+    console.error('Error fetching categories:', error);
+    throw error;
   }
 }
 
@@ -371,8 +365,16 @@ export async function createCategory(input: CreateCategoryInput): Promise<Catego
 
     if (error) throw error
 
+    const category: Categories = data as Categories;
     return {
-      data: data as Categories,
+      data: {
+        id: category.id,
+        name: category.name,
+        description: category.description || '',
+        is_active: category.is_active,
+        created_at: category.created_at || new Date().toISOString(),
+        updated_at: category.updated_at || new Date().toISOString()
+      },
       error: null
     }
   } catch (error) {
@@ -397,8 +399,16 @@ export async function updateCategory(
 
     if (error) throw error
 
+    const category: Categories = data as Categories;
     return {
-      data: data as Categories,
+      data: {
+        id: category.id,
+        name: category.name,
+        description: category.description || '',
+        is_active: category.is_active,
+        created_at: category.created_at || new Date().toISOString(),
+        updated_at: category.updated_at || new Date().toISOString()
+      },
       error: null
     }
   } catch (error) {
